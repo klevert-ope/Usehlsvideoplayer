@@ -1,0 +1,28 @@
+{
+  "name": "usehlsvideoplayer",
+  "version": "1.0.0",
+  "description": "A react hook for playing hls files",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klevert-ope/Usehlsvideoplayer.git"
+  },
+  "keywords": [
+    "hls",
+    "video",
+    "m3u8"
+  ],
+  "author": "Klevert Opee",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/klevert-ope/Usehlsvideoplayer/issues"
+  },
+  "homepage": "https://github.com/klevert-ope/Usehlsvideoplayer#readme",
+  "dependencies": {
+    "hls.js": "^1.4.12",
+    "react": "^18.2.0"
+  }
+}

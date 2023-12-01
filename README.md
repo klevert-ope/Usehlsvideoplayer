@@ -18,11 +18,11 @@ npm install usehlsvideoplayer
 
 ```javascript
 import { useEffect, useRef } from 'react';
-import { Usevideoplayer } from 'usevideoplayer';
+import { Usehlsplayer } from 'usehlsvideoplayer';
 
 const YourComponent = () => {
   const videoSource = 'your-hls-video-source-url';
-  const { videoRef } = Usevideoplayer(videoSource);
+  const { videoRef } = Usehlsplayer(videoSource);
 
   return (
     <div>
@@ -50,11 +50,11 @@ The hook returns an object with the following property:
 
 ```javascript
 import { useEffect, useRef } from 'react';
-import { Usevideoplayer } from 'usevideoplayer';
+import { Usehlsplayer } from 'usehlsvideoplayer';
 
 const YourComponent = () => {
   const videoSource = 'your-hls-video-source-url';
-  const { videoRef } = Usevideoplayer(videoSource);
+  const { videoRef } = Usehlsplayer(videoSource);
 
   useEffect(() => {
     // Access the video element using videoRef.current and perform additional actions

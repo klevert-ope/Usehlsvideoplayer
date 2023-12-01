@@ -1,6 +1,4 @@
 # Usehlsvideoplayer
-A react-hook for playing hls files.
-# usevideoplayer
 
 ## Description
 

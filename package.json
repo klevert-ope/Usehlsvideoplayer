@@ -22,9 +22,7 @@
   },
   "homepage": "https://github.com/klevert-ope/Usehlsvideoplayer#readme",
   "dependencies": {
-    "hls.js": "^1.4.12"
-  },
-  "devDependencies": {
+    "hls.js": "^1.4.12",
     "react": "^18.2.0"
   }
 }

@@ -15,7 +15,6 @@ npm install usehlsvideoplayer
 ## Usage
 
 ```javascript
-import { useEffect, useRef } from 'react';
 import { Usehlsplayer } from 'usehlsvideoplayer';
 
 const YourComponent = () => {
@@ -42,33 +41,8 @@ const YourComponent = () => {
 
 The hook returns an object with the following property:
 
-- `videoRef` (React Ref): A ref that should be attached to the `video` element in your JSX to bind the video player.
+- `videoRef` (React Ref): A ref that should be attached to the `video` element in your JSX/JS to bind the video player.
 
-## Example
-
-```javascript
-import { useEffect, useRef } from 'react';
-import { Usehlsplayer } from 'usehlsvideoplayer';
-
-const YourComponent = () => {
-  const videoSource = 'your-hls-video-source-url';
-  const { videoRef } = Usehlsplayer(videoSource);
-
-  useEffect(() => {
-    // Access the video element using videoRef.current and perform additional actions
-  }, [videoRef]);
-
-  return (
-    <div>
-	    <video ref={videoRef} controls>
-		    <source src={videoSource}
-		            type='application/x-mpegURL'
-		    />
-	    </video>
-    </div>
-  );
-};
-```
 
 ## Cleanup
 

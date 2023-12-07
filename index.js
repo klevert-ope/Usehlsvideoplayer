@@ -1,1 +1,1 @@
-export { Usehlsplayer } from './hook/usevideoplayer.jsx';
+export { Usehlsplayer } from 'hook/useHlsVideoPlayer.jsx';

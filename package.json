@@ -1,6 +1,6 @@
 {
   "name": "usehlsvideoplayer",
-  "version": "1.0.6",
+  "version": "1.1.5",
   "description": "A react hook for playing hls files",
   "main": "index.js",
   "scripts": {

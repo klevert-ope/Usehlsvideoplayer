@@ -6,7 +6,7 @@
 
 ## New Features
 
-### [1.2.2] - 2023-12-12
+### [1.2.3] - 2023-12-12
 
 - **New Feature:** [Autocomplete and guides on hover are available for the options.]
 

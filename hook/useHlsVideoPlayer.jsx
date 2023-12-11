@@ -1,5 +1,5 @@
 import Hls from 'hls.js';
-import { useEffect, useRef } from 'react';
+import { useEffect,useLayoutEffect, useRef } from 'react';
 
 /**
  * @typedef {Object} Options
@@ -93,43 +93,18 @@ export function Usehlsplayer (videoSource, options = {}) {
 	const videoRef = useRef (null);
 	const hlsRef = useRef (null);
 
-	const isHlsSupported = Hls && Hls.isSupported ();
+	const isomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-	const initializeHls = async () => {
-		if (! isHlsSupported || ! videoSource) {
-			return;
-		}
-
-		const video = videoRef.current || createVideoElement ();
-
-		if (! hlsRef.current) {
-			const isWorkerSupported = isWebWorkerSupported ();
-			const isAESSupported = checkAESSupport ();
-
-			const hlsOptions = {
-				enableWorker: isWorkerSupported && options.enableWorker,
-				enableSoftwareAES: isAESSupported && options.enableSoftwareAES,
-				...options
-			};
-
-			hlsRef.current = new Hls (hlsOptions);
-
-			try {
-				await initializeHlsInstance (videoSource, video);
-			} catch (error) {
-				handleInitializationError (error);
-			}
-		}
-	};
+	const isHlsSupported = () => Hls?.isSupported ();
 
 	const createVideoElement = () => document.createElement ('video');
 
 	const isWebWorkerSupported = () => typeof Worker !== 'undefined';
 
-	const checkAESSupport = () => {
+	const checkAESSupport = async () => {
 		if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
 			try {
-				window.crypto.subtle.importKey (
+				await window.crypto.subtle.importKey (
 					'raw',
 					new ArrayBuffer (16),
 					{ name: 'AES-CBC' },
@@ -144,10 +119,25 @@ export function Usehlsplayer (videoSource, options = {}) {
 		return false;
 	};
 
-	const initializeHlsInstance = async (source, videoElement) => {
-		await hlsRef.current.loadSource (source);
-		hlsRef.current.attachMedia (videoElement);
-		hlsRef.current.on (Hls.Events.MANIFEST_PARSED, handleManifestParsed);
+	const initializeHlsInstance = async (videoElement) => {
+		const isWorkerSupported = isWebWorkerSupported ();
+		const isAESSupported = await checkAESSupport ();
+
+		const hlsOptions = {
+			enableWorker: isWorkerSupported && options.enableWorker,
+			enableSoftwareAES: isAESSupported && options.enableSoftwareAES,
+			...options
+		};
+
+		hlsRef.current = new Hls (hlsOptions);
+
+		try {
+			await hlsRef.current.loadSource (videoSource);
+			hlsRef.current.attachMedia (videoElement);
+			hlsRef.current.on (Hls.Events.MANIFEST_PARSED, handleManifestParsed);
+		} catch (error) {
+			handleInitializationError (error);
+		}
 	};
 
 	const handleManifestParsed = () => {
@@ -156,35 +146,49 @@ export function Usehlsplayer (videoSource, options = {}) {
 		}
 	};
 
-	const isAnyBufferUpdating = () => hlsRef.current.media.sourceBuffers.some ((sb) => sb.updating);
+	const isAnyBufferUpdating = () => hlsRef.current?.media?.sourceBuffers.some ((sb) => sb.updating);
 
 	const handleInitializationError = (error) => {
 		console.error ('Error initializing Hls.js:', error);
 	};
 
-	useEffect (() => {
-		let isMounted = true;
+	const initializeHls = async () => {
+		if (! isHlsSupported () || ! videoSource) {
+			return;
+		}
 
-		const loadHls = async () => {
-			await initializeHls ().catch ((error) => {
-				console.error ('Error during video loading:', error);
-			});
-		};
+		const video = videoRef.current || createVideoElement ();
 
-		loadHls ();
-
-		return () => {
-			isMounted = false;
-			cleanupHls ();
-		};
-	}, [videoSource, options]);
-
-	const cleanupHls = () => {
-		if (hlsRef.current) {
-			hlsRef.current.off (Hls.Events.MANIFEST_PARSED, handleManifestParsed);
-			hlsRef.current.destroy ();
+		if (! hlsRef.current) {
+			await initializeHlsInstance (video);
 		}
 	};
+
+	isomorphicLayoutEffect (() => {
+		const cleanupHls = () => {
+			if (hlsRef.current) {
+				hlsRef.current.off (Hls.Events.MANIFEST_PARSED, handleManifestParsed);
+				hlsRef.current.destroy ();
+			}
+		};
+
+		const loadHls = async () => {
+			try {
+				await initializeHls ();
+			} catch (error) {
+				console.error ('Error during video loading:', error);
+			}
+		};
+
+		const initializeAndLoadHls = async () => {
+			await loadHls ();
+		};
+
+		initializeAndLoadHls ().catch (error => console.error ('Error during initialize and Loading Hls:', error));
+
+		return () => cleanupHls ();
+	}, [videoSource, options]);
+
 
 	return { videoRef };
 }

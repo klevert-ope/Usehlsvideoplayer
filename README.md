@@ -6,9 +6,9 @@
 
 ## New Features
 
-### [1.1.5] - 2023-12-07
+### [1.2.2] - 2023-12-12
 
-- **New Feature:** [The hook now offers a range of options for fine-tuning the behavior of the Hls.js instance. These options allow you to customize various aspects of video playback, such as auto-starting the stream, specifying initial quality levels, setting buffer lengths, and more. Whether you're looking for basic video playback or advanced customization, `usehlsvideoplayer` provides a seamless and flexible solution.]
+- **New Feature:** [Autocomplete and guides on hover are available for the options.]
 
 
 ## Installation

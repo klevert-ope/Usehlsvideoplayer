@@ -1,8 +1,10 @@
 {
   "name": "usehlsvideoplayer",
-  "version": "1.2.3",
+  "version": "1.2.5",
   "description": "A react hook for playing hls files",
-  "main": "dist/index.js",
+  "main": "usehlsplayer.js",
+  "module": "usehlsplayer.mjs",
+  "typings": "usehlsplayer.d.ts",
   "type": "module",
   "scripts": {
     "build": "rollup -c",
@@ -24,16 +26,15 @@
   },
   "homepage": "https://github.com/klevert-ope/Usehlsvideoplayer#readme",
   "dependencies": {
-    "hls.js": "^1.4.13",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "hls.js": "^1.4.14",
+    "react": "^18.2.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.23.5",
-    "@babel/preset-react": "^7.23.3",
-    "@rollup/plugin-babel": "^6.0.4",
-    "@rollup/plugin-commonjs": "^25.0.7",
-    "@rollup/plugin-node-resolve": "^15.2.3",
-    "rollup": "^4.7.0"
+    "@types/react": "^18.2.45",
+    "esbuild": "^0.19.10",
+    "rollup": "^4.9.1",
+    "rollup-plugin-dts": "^6.1.0",
+    "rollup-plugin-esbuild": "^6.1.0",
+    "typescript": "^5.3.3"
   }
 }

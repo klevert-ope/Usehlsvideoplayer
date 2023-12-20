@@ -1,0 +1,13 @@
+{
+"compilerOptions": {
+"target": "esnext",
+  "jsx": "react",
+  "allowSyntheticDefaultImports": true,
+  "moduleResolution": "node",
+  "baseUrl": ".",
+  "paths": {
+    "react": ["node_modules/react"],
+    "Hls": ["node_modules/hls.js"]
+  }
+}
+}

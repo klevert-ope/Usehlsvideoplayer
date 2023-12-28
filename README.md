@@ -1,10 +1,18 @@
 # Usehlsvideoplayer
-[![Static Badge](https://img.shields.io/badge/npm-latest_v1.2.5-blue?logo=npm)](https://www.npmjs.com/package/usehlsvideoplayer)
+[![Static Badge](https://img.shields.io/badge/npm-latest_v1.2.6-blue?logo=npm)](https://www.npmjs.com/package/usehlsvideoplayer)
 ![Static Badge](https://img.shields.io/badge/license-ISC-red)
 
 `usehlsvideoplayer` is a React hook designed to simplify the integration of [Hls.js](https://github.com/video-dev/hls.js) for video playback in your React applications. This hook creates a video player instance and manages the loading of an HTTP Live Streaming (HLS) video source. With `usehlsvideoplayer`, you can effortlessly incorporate Hls.js functionality into your components.
 
 ## Installation
+## Dependencies
+
+This package has a dependency on react, [Hls.js](https://github.com/video-dev/hls.js) and typescript,
+so make sure to include it in your project.
+
+```bash
+npm install hls.js
+```
 
 Install the package using npm:
 
@@ -123,14 +131,6 @@ The hook returns an object with the following property:
 ## Cleanup
 
 The hook takes care of cleaning up resources when the component unmounts. It automatically detaches the Hls.js instance and removes event listeners.
-
-## Dependencies
-
-This package has a dependency on [Hls.js](https://github.com/video-dev/hls.js), so make sure to include it in your project.
-
-```bash
-npm install hls.js
-```
 
 ## License
 

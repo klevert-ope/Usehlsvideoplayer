@@ -1,3 +1,14 @@
+/**
+ * @file
+ * usehlsvideoplayer is a React hook
+ * designed to simplify the integration of Hls.js for video playback in your React applications.
+ * This hook creates a video player instance and manages the loading of an HTTP Live Streaming (HLS) video source.
+ * With usehlsvideoplayer, you can effortlessly incorporate Hls.js functionality into your components.
+ * The hook takes care of cleaning up resources when the component unmounts.
+ * It automatically detaches the Hls.js instance and removes event listeners.
+ * @copyright (c) 2023 Klevert Opee
+ * @license ISC
+ */
 import Hls from "hls.js";
 import React, { DependencyList, EffectCallback, useEffect, useLayoutEffect, useRef } from "react";
 

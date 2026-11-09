@@ -1,0 +1,93 @@
+name: Validate and package
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        react: ["18.2.0", "locked"]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - if: matrix.react == '18.2.0'
+        run: npm install --no-save --package-lock=false --ignore-scripts react@18.2.0 react-dom@18.2.0
+      - run: npm run typecheck && npm run lint && npm run format:check
+      - run: npm test
+      - run: npm run audit && npm audit --omit=dev
+      - if: matrix.react == 'locked'
+        run: npm audit signatures
+      - run: npm run check:package
+        env:
+          CHECK_NEXT: ${{ matrix.react == 'locked' && '1' || '0' }}
+
+  browser:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            project: chromium
+            browser: chromium
+          - os: macos-latest
+            project: native
+            browser: webkit
+    runs-on: ${{ matrix.os }}
+    env:
+      REQUIRE_NATIVE_HLS: "1"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - if: runner.os == 'macOS'
+        run: command -v ffmpeg || brew install ffmpeg
+      - run: npm run fixtures
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run test:browser:${{ matrix.project }}
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: browser-evidence-${{ matrix.project }}
+          path: test-results
+          if-no-files-found: ignore
+
+  candidate:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [package, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm pack && npm sbom --omit=dev --sbom-format cyclonedx > sbom.cdx.json
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: npm-candidate
+          path: |
+            *.tgz
+            sbom.cdx.json

@@ -52,3 +52,7 @@ The packed root and core entries passed ESM, CommonJS, strict declaration and SS
 ## Release gate
 
 The candidate workflow runs package and browser checks before building a tarball and SBOM. Native HLS, external LL-HLS and hosted CI evidence remain qualification gates. The repository maintainer owns dependency review. The hls.js range stays within the verified 1.7 minor because the restricted loader relies on the upstream FetchLoader handoff. The lockfile and automated update PRs support reviewing hls.js advisories and removing the temporary minimatch override when upstream ranges permit.
+
+The [npm Trusted Publisher](https://docs.npmjs.com/trusted-publishers/) for `usehlsvideoplayer` uses the GitHub owner `klevert-ope`, repository `Usehlsvideoplayer` and workflow filename `publish.yml`. Leave the environment field blank and enable direct `npm publish`. Set this up in the npm package settings once the workflow exists on GitHub. A new trust configuration needs a successful publish within two days.
+
+Run **Validate and package** on the release commit in `master` to rehearse the package and browser checks. Once the release is approved, push an annotated tag matching the stable version in `package.json`, such as `v2.0.0`. **Publish to npm** runs the checks again for the tagged commit and publishes the candidate tarball via OIDC. Verify the release with `npm view usehlsvideoplayer dist-tags --registry=https://registry.npmjs.org`. Before rerunning a failed publish, check whether that version is already in the registry.

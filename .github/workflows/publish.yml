@@ -1,0 +1,56 @@
+name: Publish to npm
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-${{ github.ref }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check release tag
+        shell: bash
+        run: |
+          git merge-base --is-ancestor HEAD origin/master || {
+            echo 'The release commit must be on master.' >&2
+            exit 1
+          }
+          version=$(node -p 'require("./package.json").version')
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ || "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo 'The tag must match the stable version in package.json.' >&2
+            exit 1
+          fi
+
+  candidate:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+    with:
+      candidate: true
+
+  publish:
+    needs: candidate
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: npm-candidate
+      - name: Publish the candidate tarball
+        shell: bash
+        run: npm publish "./usehlsvideoplayer-${GITHUB_REF_NAME#v}.tgz" --access public --ignore-scripts

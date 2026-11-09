@@ -2,8 +2,15 @@ name: Validate and package
 
 on:
   push:
+    branches: ["**"]
+    tags-ignore: ["v*"]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      candidate:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -70,9 +77,10 @@ jobs:
           name: browser-evidence-${{ matrix.project }}
           path: test-results
           if-no-files-found: ignore
+          overwrite: true
 
   candidate:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || inputs.candidate
     needs: [package, browser]
     runs-on: ubuntu-latest
     steps:
@@ -82,12 +90,14 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-          cache: npm
+          package-manager-cache: false
       - run: npm ci --ignore-scripts
       - run: npm pack && npm sbom --omit=dev --sbom-format cyclonedx > sbom.cdx.json
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: npm-candidate
+          if-no-files-found: error
+          overwrite: true
           path: |
             *.tgz
             sbom.cdx.json

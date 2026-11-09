@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "rootDir": ".",
+    "declaration": false,
+    "noEmit": true
+  },
+  "include": ["playground/**/*.tsx", "src"]
+}

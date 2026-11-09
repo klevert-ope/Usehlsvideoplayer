@@ -1,14 +1,23 @@
 {
   "name": "usehlsvideoplayer",
-  "version": "1.2.6",
-  "description": "A react hook for playing hls files",
-  "main": "usehlsplayer.js",
-  "module": "usehlsplayer.mjs",
-  "typings": "usehlsplayer.d.ts",
+  "version": "2.0.0",
+  "description": "Headless HLS playback controller and React hooks",
   "type": "module",
   "scripts": {
-    "build": "rollup -c",
-    "prepublishOnly": "npm run build"
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepack": "npm run build",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.playground.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:browser": "playwright test",
+    "test:browser:chromium": "playwright test --project=chromium",
+    "test:browser:native": "playwright test --project=native",
+    "check:package": "node scripts/check-package.mjs",
+    "dev": "vite --host 127.0.0.1",
+    "fixtures": "node scripts/fixtures.mjs",
+    "audit": "npm audit --audit-level=moderate"
   },
   "repository": {
     "type": "git",
@@ -25,18 +34,64 @@
     "url": "https://github.com/klevert-ope/Usehlsvideoplayer/issues"
   },
   "homepage": "https://github.com/klevert-ope/Usehlsvideoplayer#readme",
-  "optionalDependencies": {
-    "hls.js": "^1.4.14"
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./core": {
+      "import": {
+        "types": "./dist/esm/core.d.ts",
+        "default": "./dist/esm/core.js"
+      },
+      "require": {
+        "types": "./dist/cjs/core.d.ts",
+        "default": "./dist/cjs/core.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "docs",
+    "SECURITY.md",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "peerDependencies": {
+    "react": "^18.2.0 || ^19.0.0"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "typescript": "^5.3.3"
+    "hls.js": "~1.7.4"
   },
   "devDependencies": {
-    "@types/react": "^18.2.45",
-    "esbuild": "^0.19.10",
-    "rollup": "^4.9.1",
-    "rollup-plugin-dts": "^6.1.0",
-    "rollup-plugin-esbuild": "^6.1.0"
+    "@playwright/test": "^1.65.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^10.14.0",
+    "fast-check": "^4.10.2",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.9.10",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.7"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "overrides": {
+    "minimatch": "11.0.5"
   }
 }

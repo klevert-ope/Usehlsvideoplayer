@@ -1,0 +1,127 @@
+import type { PlaybackState, PlaybackStatus } from "./types.js";
+
+const transitions: Readonly<Record<PlaybackStatus, readonly PlaybackStatus[]>> =
+  {
+    idle: ["initialising", "destroyed"],
+    initialising: ["loading", "error", "idle", "destroyed"],
+    loading: [
+      "ready",
+      "playing",
+      "paused",
+      "buffering",
+      "seeking",
+      "recovering",
+      "ended",
+      "error",
+      "idle",
+      "destroyed",
+    ],
+    ready: [
+      "playing",
+      "paused",
+      "buffering",
+      "seeking",
+      "recovering",
+      "ended",
+      "error",
+      "idle",
+      "destroyed",
+    ],
+    playing: [
+      "paused",
+      "buffering",
+      "seeking",
+      "recovering",
+      "ended",
+      "error",
+      "idle",
+      "destroyed",
+    ],
+    paused: [
+      "playing",
+      "buffering",
+      "seeking",
+      "recovering",
+      "ended",
+      "error",
+      "idle",
+      "destroyed",
+    ],
+    buffering: [
+      "ready",
+      "playing",
+      "paused",
+      "seeking",
+      "recovering",
+      "ended",
+      "error",
+      "idle",
+      "destroyed",
+    ],
+    seeking: [
+      "ready",
+      "playing",
+      "paused",
+      "buffering",
+      "recovering",
+      "ended",
+      "error",
+      "idle",
+      "destroyed",
+    ],
+    recovering: [
+      "ready",
+      "playing",
+      "paused",
+      "ended",
+      "error",
+      "idle",
+      "destroyed",
+    ],
+    ended: [
+      "playing",
+      "paused",
+      "buffering",
+      "seeking",
+      "recovering",
+      "error",
+      "idle",
+      "destroyed",
+    ],
+    error: ["idle", "destroyed"],
+    destroyed: [],
+  };
+
+export function canTransition(
+  from: PlaybackStatus,
+  to: PlaybackStatus,
+): boolean {
+  return from === to || transitions[from].includes(to);
+}
+
+export function initialState(status: PlaybackStatus = "idle"): PlaybackState {
+  return {
+    status,
+    engine: null,
+    currentTime: 0,
+    duration: null,
+    buffered: [],
+    seekable: [],
+    muted: false,
+    volume: 1,
+    playbackRate: 1,
+    quality: { levels: [], mode: "unavailable", selected: null, current: null },
+    audio: { tracks: [], selected: null },
+    subtitles: { tracks: [], selected: null },
+    live: {
+      isLive: null,
+      edge: null,
+      syncPosition: null,
+      latency: null,
+      atEdge: false,
+      canSeekToLive: false,
+    },
+    error: null,
+    recovery: null,
+  };
+}

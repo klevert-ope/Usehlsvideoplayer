@@ -1,1 +1,7 @@
-.idea
+.idea/
+node_modules/
+dist/
+public/fixtures/
+playwright-report/
+test-results/
+*.tgz

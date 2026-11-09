@@ -1,137 +1,90 @@
-# Usehlsvideoplayer
-[![Static Badge](https://img.shields.io/badge/npm-latest_v1.2.6-blue?logo=npm)](https://www.npmjs.com/package/usehlsvideoplayer)
-![Static Badge](https://img.shields.io/badge/license-ISC-red)
+# usehlsvideoplayer
 
-`usehlsvideoplayer` is a React hook designed to simplify the integration of [Hls.js](https://github.com/video-dev/hls.js) for video playback in your React applications. This hook creates a video player instance and manages the loading of an HTTP Live Streaming (HLS) video source. With `usehlsvideoplayer`, you can effortlessly incorporate Hls.js functionality into your components.
+Headless HLS playback for an HTML video element. Use the React hooks or the framework-independent TypeScript controller. The library selects hls.js where MSE or Managed Media Source is supported and falls back to browser-native HLS.
 
-## Installation
-## Dependencies
+The examples below target the 2.0.0 candidate.
 
-This package has a dependency on react, [Hls.js](https://github.com/video-dev/hls.js) and typescript,
-so make sure to include it in your project.
+## Quick start
 
-```bash
-npm install hls.js
-```
-
-Install the package using npm:
-
-```bash
+```sh
 npm install usehlsvideoplayer
 ```
 
-## Basic Usage
+The React entry supports React 18.2 and 19. The `/core` entry can be installed without React.
 
-```javascript
-import { Usehlsplayer } from 'usehlsvideoplayer';
+```tsx
+"use client";
 
-const YourComponent = () => {
-  const videoSource = 'your-hls-video-source-url';
-  const { videoRef } = Usehlsplayer(videoSource);
+import { useHlsPlayer } from "usehlsvideoplayer";
 
-  return (
-    <div>
-      <video ref={videoRef} controls>
-	      <source src={videoSource}
-	              type='application/x-mpegURL'
-	      />
-      </video>
-    </div>
-  );
-};
-```
-## Advanced Usage
-
-```javascript
-import { Usehlsplayer } from 'usehlsvideoplayer';
-
-const YourComponent = () => {
-  const videoSource = 'your-hls-video-source-url';
-  const { videoRef } = Usehlsplayer(videoSource, {
-	  startLevel: 2,
-	  maxBufferLength: 60,
-	  enableSoftwareAES: false,
-	  // Add more options as needed. Below are the list of options and there default
-  });
+export function StreamPlayer({ src }: { src: string }) {
+  const {
+    videoRef,
+    state,
+    controls,
+    quality,
+    audio,
+    subtitles,
+    live,
+    metrics,
+    error,
+  } = useHlsPlayer({ src, autoPlay: false, lowLatency: true });
 
   return (
-    <div>
-      <video ref={videoRef} controls>
-	      <source src={videoSource}
-	              type='application/x-mpegURL'
-	      />
-      </video>
-    </div>
+    <>
+      <video ref={videoRef} controls playsInline />
+      <button onClick={() => void controls.play()}>Play</button>
+      <button disabled={!live.canSeekToLive} onClick={controls.seekToLive}>
+        Seek to live
+      </button>
+      <p role="status">{state.status}</p>
+      {error?.fatal && state.status === "error" && (
+        <p role="alert">{error.message}</p>
+      )}
+    </>
   );
-};
+}
 ```
-## Options
-The following options are specific to Hls.js and provide fine-tuning capabilities for adapting it to different streaming scenarios:
 
-1. **`autoStartLoad` (default: `true`):**
-    - **Use Case:** Determines whether the loading of the stream should start automatically when the Hls.js instance is created.
+Give the hook one video element and leave its `src` and `<source>` children unset. Pass a new `src` to replace the stream, or `null` to clear it. For Next.js App Router, put the player in a Client Component as shown above and pass a serializable URL from the Server Component. Server rendering yields an idle snapshot and starts no media requests.
 
-2. **`startLevel` (default: `-1`):**
-    - **Use Case:** Specifies the initial quality level index to start playback with. Use `-1` for automatic level selection.
+## Framework-independent usage
 
-3. **`maxBufferLength` (default: `30`):**
-    - **Use Case:** Sets the maximum buffer length (in seconds) to keep for instant playback. Adjust for optimizing buffering behavior.
+```ts
+import { createPlaybackController } from "usehlsvideoplayer/core";
 
-4. **`maxBufferSize` (default: `60 * 1000 * 1000`):**
-    - **Use Case:** Defines the maximum buffer size (in bytes) for the media element. Useful for controlling memory usage.
+const player = createPlaybackController();
+const unsubscribe = player.subscribe(() => render(player.getState()));
+player.setSource(videoElement, "/streams/master.m3u8");
 
-5. **`maxMaxBufferLength` (default: `600`):**
-    - **Use Case:** Specifies the maximum buffer length (in seconds) for live content. Adjust for optimizing live stream buffering.
+// On teardown
+unsubscribe();
+player.destroy();
+```
 
-6. **`liveSyncDurationCount` (default: `3`):**
-    - **Use Case:** Sets the number of target durations to keep in live synchronization of the manifest. Affects live stream synchronization.
+## Documentation
 
-7. **`liveMaxLatencyDurationCount` (default: `5`):**
-    - **Use Case:** Configures the number of target durations to keep in live synchronization for low-latency applications.
+- [API, state transitions and streaming examples](docs/api.md)
+- [Browser compatibility and troubleshooting](docs/compatibility.md)
+- [Migrating from `Usehlsplayer`](docs/migration.md)
+- [Security and authenticated requests](SECURITY.md)
+- [Repository audit and engineering evidence](docs/modernization.md)
 
-8. **`enableWorker` (default: `true`):**
-    - **Use Case:** Enables or disables the use of Web Workers for fetching and parsing segments. Can improve performance.
+## Development
 
-9. **`enableSoftwareAES` (default: `true`):**
-    - **Use Case:** Enables or disables software-based AES decryption. Adjust based on hardware support for decryption.
+Use Node 24 and FFmpeg with libx264.
 
-10. **`forceKeyFrameOnDiscontinuity` (default: `true`):**
-    - **Use Case:** Determines whether to force the generation of keyframes on discontinuity for better seeking in live streams.
+```sh
+npm ci --ignore-scripts
+npm test
+npm run typecheck
+npm run lint
+npm run fixtures
+npm run dev
+```
 
-11. **`levelLoadingTimeOut` (default: `10000`):**
-    - **Use Case:** Sets the timeout (in milliseconds) for level loading. Useful for handling delays in loading levels.
-
-12. **`manifestLoadingTimeOut` (default: `10000`):**
-    - **Use Case:** Sets the timeout (in milliseconds) for manifest loading. Useful for handling delays in loading the manifest.
-
-13. **`xhrSetup` (default: `null`):**
-    - **Use Case:** Allows customization of XHR setup function for handling XMLHttpRequest. Useful for advanced use cases.
-
-14. **`capLevelToPlayerSize` (default: `false`):**
-    - **Use Case:** Limits the selected quality level to the size of the player. Useful for optimizing quality based on player dimensions.
-
-15. **`startFragPrefetch` (default: `false`):**
-    - **Use Case:** Initiates fragment prefetching to improve start-up time by loading fragments in advance.
-
-16. **`appendErrorMaxRetry` (default: `3`):**
-    - **Use Case:** Specifies the maximum number of retries for appending a segment on error. Useful for handling segment append errors.
-
-
-## Parameters
-
-- `videoSource` (string): The URL of the HLS video source to be loaded.
-
-## Return Value
-
-The hook returns an object with the following property:
-
-- `videoRef` (React Ref): A ref that should be attached to the `video` element in your JSX/JS to bind the video player.
-
-
-## Cleanup
-
-The hook takes care of cleaning up resources when the component unmounts. It automatically detaches the Hls.js instance and removes event listeners.
+The loopback-only playground plays generated VOD, live, alternate audio and captions. Run `npx playwright install chromium` and `npm run test:browser:chromium` for the MSE suite. Run `npm run test:browser:native` with Playwright WebKit on a system with native HLS support.
 
 ## License
 
-This project is licensed under the `ISC` License.
+ISC

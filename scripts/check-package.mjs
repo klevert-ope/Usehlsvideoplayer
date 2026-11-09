@@ -82,7 +82,9 @@ try {
       entry,
       "index.js",
     );
-    assert.match(readFileSync(path, "utf8"), /^"use client";/);
+    const directive =
+      entry === "esm" ? /^"use client";/ : /^"use strict";\r?\n"use client";/;
+    assert.match(readFileSync(path, "utf8"), directive);
   }
   node([
     "--input-type=module",

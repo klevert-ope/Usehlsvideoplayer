@@ -83,7 +83,7 @@ npm run fixtures
 npm run dev
 ```
 
-The loopback-only playground plays generated VOD, live, alternate audio and captions. Run `npx playwright install chromium` and `npm run test:browser:chromium` for the MSE suite. Run `npm run test:browser:native` with Playwright WebKit on a system with native HLS support.
+The loopback-only playground plays generated VOD, live, alternate audio and captions. The browser suite also uses local CMAF and LL-HLS fixtures. See [playback qualification](docs/qualification.md) for browser, soak and release checks.
 
 ## License
 

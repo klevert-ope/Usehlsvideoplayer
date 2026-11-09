@@ -1,4 +1,5 @@
 import Hls from "hls.js";
+import { selectEngine } from "./engine-selection.js";
 import { classifyHlsError, failure, sourceUrl } from "./errors.js";
 import type {
   EngineKind,
@@ -40,17 +41,6 @@ export interface PlaybackEngine {
 }
 
 export type EngineFactory = (context: EngineContext) => PlaybackEngine | null;
-
-export function selectEngine(
-  mode: PlayerOptions["engine"],
-  mse: boolean,
-  native: boolean,
-  requiresMse = false,
-): EngineKind | null {
-  if (mode !== "native" && mse) return "hls.js";
-  if (mode !== "hls.js" && !requiresMse && native) return "native";
-  return null;
-}
 
 const policyMarker = "HLS_REQUEST_POLICY";
 
@@ -200,7 +190,9 @@ function hlsEngine({
       hls.on(events.ERROR, (_event, data) => {
         if (!active) return;
         const error =
-          data.response?.text === policyMarker
+          policy &&
+          data.response?.code === 0 &&
+          data.response.text === policyMarker
             ? failure("request-policy", kind)
             : classifyHlsError(data);
         failed(error);

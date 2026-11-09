@@ -49,10 +49,8 @@ The library's emitted ESM JavaScript measured 43,383 bytes, or 9,671 bytes gzipp
 
 The packed root and core entries passed ESM, CommonJS, strict declaration and SSR checks on React 18.2.0 and 19.3.1. Next.js 16.4.5 built and prerendered the App Router example with React 19.3.1.
 
-## Release gate
+## Original release qualification notes
 
 The candidate workflow runs hosted package and browser checks, including native HLS, before building a tarball and SBOM. The external LL-HLS smoke test on Windows Chromium used the [Mux sample listed by hls.js](https://github.com/video-dev/hls.js/blob/master/tests/test-streams.js). Playback decoded video and advanced while the live origin advertised partial segments and returned successful blocking playlist reloads. The repository maintainer owns dependency review. The hls.js range stays within the verified 1.7 minor because the restricted loader relies on the upstream FetchLoader handoff. The lockfile and automated update PRs support reviewing hls.js advisories and removing the temporary minimatch override when upstream ranges permit.
 
-The [npm Trusted Publisher](https://docs.npmjs.com/trusted-publishers/) for `usehlsvideoplayer` uses the GitHub owner `klevert-ope`, repository `Usehlsvideoplayer` and workflow filename `publish.yml`. Leave the environment field blank and enable direct `npm publish`. Set this up in the npm package settings once the workflow exists on GitHub. A new trust configuration needs a successful publish within two days.
-
-Run **Validate and package** on the release commit in `master` to rehearse the package and browser checks. Once the release is approved, push an annotated tag matching the stable version in `package.json`, such as `v2.0.0`. **Publish to npm** runs the checks again for the tagged commit and publishes the candidate tarball via OIDC. Verify the release with `npm view usehlsvideoplayer dist-tags --registry=https://registry.npmjs.org`. Before rerunning a failed publish, check whether that version is already in the registry.
+For the current release process, see [qualification and release setup](qualification.md). The previous tag-triggered workflow and environment-free npm trust setup are superseded.

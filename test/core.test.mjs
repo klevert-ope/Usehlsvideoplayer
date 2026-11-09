@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { test } from "node:test";
 import fc from "fast-check";
 import { createPlaybackController, selectEngine } from "usehlsvideoplayer/core";
@@ -86,6 +87,88 @@ const network = classifyHlsError({
   response: { code: 503 },
 });
 const flush = () => Promise.resolve();
+
+test("two controllers cannot own one element, and the claim transfers after teardown", () => {
+  const first = rig();
+  const second = rig();
+  first.controller.setSource(first.video, "/first");
+  second.controller.setSource(first.video, "/second");
+  assert.equal(second.sessions.length, 0);
+  assert.equal(second.controller.getState().status, "error");
+  assert.equal(first.sessions[0].destroyed, 0);
+  first.controller.destroy();
+  second.controller.setSource(first.video, "/second");
+  assert.equal(second.sessions[0].attached, 1);
+  second.controller.destroy();
+});
+
+test("CommonJS and ESM controllers enforce the same media claim", () => {
+  const { createPlaybackController: createCjs } = createRequire(
+    import.meta.url,
+  )("usehlsvideoplayer/core");
+  const first = rig();
+  let allocated = false;
+  const second = createCjs(() => {
+    allocated = true;
+    return null;
+  });
+  first.controller.setSource(first.video, "/first");
+  try {
+    second.setSource(first.video, "/second");
+    assert.equal(allocated, false);
+    assert.equal(second.getState().status, "error");
+  } finally {
+    second.destroy();
+    first.controller.destroy();
+  }
+});
+
+test("a source chosen during teardown attaches after the old adapter returns", async () => {
+  const video = new Video();
+  let attached = null;
+  const controller = createPlaybackController(({ url }) => ({
+    kind: "hls.js",
+    features: () => ({}),
+    attach: () => {
+      attached = url.pathname;
+    },
+    destroy: () => {
+      if (url.pathname === "/first") controller.setSource(video, "/latest");
+      attached = null;
+    },
+  }));
+  controller.setSource(video, "/first");
+  video.ready(90);
+  controller.setSource(video, "/superseded");
+  assert.equal(controller.getState().duration, null);
+  assert.equal(controller.getState().status, "idle");
+  await flush();
+  assert.equal(attached, "/latest");
+  assert.equal(controller.getState().status, "loading");
+  controller.destroy();
+});
+
+test("engine sampling cannot publish old live data during reentrant replacement", async () => {
+  const video = new Video();
+  const edges = [];
+  const controller = createPlaybackController(({ url }) => ({
+    kind: "hls.js",
+    attach() {},
+    destroy() {},
+    features() {
+      if (url.pathname !== "/first") return {};
+      controller.setSource(video, "/next");
+      return { live: { isLive: true, edge: 900, syncPosition: 895 } };
+    },
+  }));
+  controller.subscribe(() => edges.push(controller.getState().live.edge));
+  controller.setSource(video, "/first");
+  video.dispatch("progress");
+  await flush();
+  assert.ok(!edges.includes(900));
+  assert.equal(controller.getState().status, "loading");
+  controller.destroy();
+});
 
 test("capabilities and explicit preferences determine the engine", () => {
   assert.equal(selectEngine("auto", true, true), "hls.js");
@@ -307,6 +390,29 @@ test("a stale play rejection cannot set an error on the next source", async () =
   assert.equal(await pending, false);
   assert.equal(controller.getState().error, null);
   assert.equal(sessions[0].destroyed, 1);
+  controller.destroy();
+});
+
+test("pause invalidates the old play request without discarding a subsequent seek and play", async () => {
+  const { controller, video } = rig();
+  const requests = [];
+  video.play = () =>
+    new Promise((resolve, reject) => requests.push({ resolve, reject }));
+  controller.setSource(video, "/vod");
+  video.ready();
+  const old = controller.controls.play();
+  assert.equal(controller.controls.pause(), true);
+  assert.equal(controller.controls.seek(5), true);
+  const next = controller.controls.play();
+  requests[0].reject(new DOMException("signed secret", "NotAllowedError"));
+  assert.equal(await old, false);
+  video.paused = false;
+  video.dispatch("playing");
+  requests[1].resolve();
+  assert.equal(await next, true);
+  assert.equal(controller.getState().status, "playing");
+  assert.equal(controller.getState().currentTime, 5);
+  assert.equal(controller.getState().error, null);
   controller.destroy();
 });
 

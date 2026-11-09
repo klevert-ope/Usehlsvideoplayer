@@ -1,5 +1,5 @@
 export { createPlaybackController } from "./controller.js";
-export { selectEngine } from "./engines.js";
+export { selectEngine } from "./engine-selection.js";
 export type {
   EngineContext,
   EngineFactory,

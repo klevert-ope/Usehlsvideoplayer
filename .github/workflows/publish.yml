@@ -1,8 +1,12 @@
 name: Publish to npm
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      qualification_run:
+        description: Successful Extended playback qualification run ID for this exact commit
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -13,11 +17,18 @@ concurrency:
 jobs:
   version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
       - name: Check release tag
         shell: bash
         run: |
@@ -26,10 +37,15 @@ jobs:
             exit 1
           }
           version=$(node -p 'require("./package.json").version')
-          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ || "$GITHUB_REF_NAME" != "v$version" ]]; then
+          if [[ "$GITHUB_REF_TYPE" != tag || ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ || "$GITHUB_REF_NAME" != "v$version" ]]; then
             echo 'The tag must match the stable version in package.json.' >&2
             exit 1
           fi
+      - name: Verify qualification for this exact source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUALIFICATION_RUN: ${{ inputs.qualification_run }}
+        run: node scripts/check-qualification.mjs
 
   candidate:
     needs: version
@@ -40,6 +56,7 @@ jobs:
   publish:
     needs: candidate
     runs-on: ubuntu-latest
+    environment: npm-release
     permissions:
       id-token: write
     steps:

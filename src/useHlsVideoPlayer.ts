@@ -113,7 +113,17 @@ function useSession(
       sameOptions(last.options, config)
     )
       return;
-    previous.current = { video, src, options: config };
+    previous.current = {
+      video,
+      src,
+      options: {
+        ...config,
+        request: config.request && {
+          ...config.request,
+          allowedOrigins: [...config.request.allowedOrigins],
+        },
+      },
+    };
     controller.setSource(video, src, config);
   });
 

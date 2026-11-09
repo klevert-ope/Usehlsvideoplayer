@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { llFixture } from "./scripts/ll-fixture.mjs";
 
 const boot = Date.now();
 export default defineConfig({
@@ -6,6 +7,10 @@ export default defineConfig({
     {
       name: "local-live-fixture",
       configureServer(server) {
+        server.middlewares.use("/fixture-revision", (_request, response) => {
+          response.end(process.env.GITHUB_SHA ?? "local");
+        });
+        server.middlewares.use("/live/ll.m3u8", llFixture(boot));
         server.middlewares.use("/live/stream.m3u8", (_req, res) => {
           const sequence = Math.floor((Date.now() - boot) / 1000);
           const segments = Array.from({ length: 6 }, (_, offset) => {

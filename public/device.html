@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Physical device HLS qualification</title>
+  <button id="play" disabled>Play fixture</button>
+  <video id="video" playsinline muted width="320" height="180"></video>
+  <script type="module">
+    import { createPlaybackController } from "/src/core.ts";
+    const video = document.querySelector("#video");
+    const button = document.querySelector("#play");
+    const controller = createPlaybackController();
+    const engine = new URLSearchParams(location.search).get("engine");
+    const revision = await fetch("/fixture-revision").then((response) =>
+      response.text(),
+    );
+    let decoded = 0;
+    if (video.requestVideoFrameCallback)
+      video.requestVideoFrameCallback(function frame() {
+        decoded++;
+        video.requestVideoFrameCallback(frame);
+      });
+    window.deviceSample = () => ({
+      revision,
+      decoded,
+      currentTime: video.currentTime,
+      agent: navigator.userAgent,
+      ...controller.getState(),
+      hasSource: video.hasAttribute("src"),
+    });
+    window.deviceDestroy = () => controller.destroy();
+    controller.setSource(video, "/fixtures/low/index.m3u8", {
+      engine,
+      recovery: false,
+    });
+    button.addEventListener("click", () => void controller.controls.play());
+    button.disabled = false;
+  </script>
+</html>

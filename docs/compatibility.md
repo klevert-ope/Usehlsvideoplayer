@@ -8,7 +8,7 @@
 | Browser with neither HLS path                                    | Unsupported                         | The controller reports a typed error.                                                                                   |
 | Node and Next.js server rendering                                | Inactive                            | Imports and initial snapshots work without browser globals.                                                             |
 
-This table describes capability paths. The [verification record](modernization.md) gives the actual browser coverage. The codec, manifest, transport and platform must all support the stream.
+This table describes capability paths. Use the [qualification gates](qualification.md) to check actual browser and device coverage for a release. The codec, manifest, transport and platform must all support the stream.
 
 | Symptom                               | Check                                                                                                                                 |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -21,4 +21,4 @@ This table describes capability paths. The [verification record](modernization.m
 | Seek-to-live disabled                 | Wait for a live playlist and a seekable range. Native detection depends on the browser exposing an infinite duration.                 |
 | Metrics remain empty                  | Enable `metrics` on the attachment. Frame quality and latency can remain unavailable on some browsers.                                |
 
-The live playground uses a rolling local transport-stream fixture. It is suitable for lifecycle and DVR checks. LL-HLS needs an origin serving partial segments, blocking reload and compliant holdback values.
+The live playground uses a rolling local transport-stream fixture. The browser suite separately tests an LL-HLS origin that serves CMAF partial segments, holds blocking reloads until parts are published and advertises a part holdback. These fixtures do not replace testing the encoding ladder, CDN and devices used by a deployment.

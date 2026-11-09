@@ -132,6 +132,34 @@ test("Strict Mode and stream changes dispose each HLS session once", async (t) =
   );
 });
 
+test("React allowlist revocation replaces the old protected session even with a reused array", async (t) => {
+  const player = await mount(t);
+  const allowedOrigins = ["https://example.test", "https://old-cdn.test"];
+  const request = { allowedOrigins, credentials: "omit" };
+  const configs = [];
+  // The adapter must select the Fetch loader before it calls loadSource.
+  Object.assign(window, { fetch, AbortController, ReadableStream, Request });
+  t.mock.method(Hls, "isSupported", () => true);
+  t.mock.method(Hls.prototype, "loadSource", function () {
+    configs.push(this.config.fetchSetup);
+  });
+  t.mock.method(Hls.prototype, "attachMedia", () => {});
+  function Player() {
+    const { videoRef } = useHlsController({ src: "/manifest", request });
+    return createElement("video", { ref: videoRef });
+  }
+  await player.renderNode(createElement(Player));
+  const count = configs.length;
+  assert.ok(count > 0);
+  await configs.at(-1)({ url: "https://old-cdn.test/segment" }, {});
+  allowedOrigins.pop();
+  await player.renderNode(createElement(Player));
+  assert.equal(configs.length, count + 1);
+  await assert.rejects(
+    configs.at(-1)({ url: "https://old-cdn.test/segment" }, {}),
+  );
+});
+
 test("native HLS handles a late video ref, playback errors and cleanup", async (t) => {
   const player = await mount(t);
   const errors = [];
@@ -275,6 +303,7 @@ test("a selector subscriber skips updates from media time samples", async (t) =>
   );
   t.mock.method(window.HTMLMediaElement.prototype, "load", () => {});
   let renders = 0;
+  let fullRenders = 0;
   let store;
   function Status({ playback }) {
     renders++;
@@ -285,6 +314,10 @@ test("a selector subscriber skips updates from media time samples", async (t) =>
     );
     return createElement("p", null, status);
   }
+  function Position({ playback }) {
+    fullRenders++;
+    return createElement("p", null, usePlaybackState(playback).currentTime);
+  }
   function Player() {
     const attachment = useHlsController({ src: "/stream.m3u8" });
     store = attachment.store;
@@ -293,16 +326,28 @@ test("a selector subscriber skips updates from media time samples", async (t) =>
       null,
       createElement("video", { ref: attachment.videoRef }),
       createElement(Status, { playback: store }),
+      createElement(Position, { playback: store }),
     );
   }
   await player.renderNode(createElement(Player));
   const baseline = renders;
+  const fullBaseline = fullRenders;
   await act(async () => {
     player.video.currentTime = 5;
     player.video.dispatchEvent(new window.Event("timeupdate"));
   });
   assert.equal(store.getState().currentTime, 5);
+  for (let i = 1; i <= 10; i++) {
+    await act(async () => {
+      player.video.currentTime = 5 + i / 4;
+      player.video.dispatchEvent(new window.Event("progress"));
+    });
+  }
   assert.equal(renders, baseline);
+  assert.ok(fullRenders - fullBaseline >= 11);
+  t.diagnostic(
+    `11 media updates: ${renders - baseline} selected renders, ${fullRenders - fullBaseline} full snapshot renders in Strict Mode`,
+  );
   await act(async () => {
     Object.defineProperty(player.video, "readyState", { value: 4 });
     player.video.dispatchEvent(new window.Event("canplay"));

@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 
-const fixture = "/fixtures/master.m3u8";
 const noRetry = {
   maxTimeToFirstByteMs: 1000,
   maxLoadTimeMs: 2000,
@@ -18,23 +17,36 @@ async function begin(page, path = "/") {
 
 test("VOD decodes through hls.js, changes rendition and selects alternate audio and captions", async ({
   page,
-}) => {
+}, info) => {
+  test.setTimeout(50_000);
   await begin(page);
   await expect(page.getByTestId("engine")).toHaveText("hls.js");
   const video = page.locator("video");
   await expect
     .poll(() => video.evaluate((element) => element.currentTime))
     .toBeGreaterThan(0.25);
+  const toLow = performance.now();
   await page.getByLabel("Quality").selectOption({ label: "180p" });
   await expect(page.getByTestId("current-quality")).toHaveText("0");
   await expect
     .poll(() => video.evaluate((element) => element.videoHeight))
     .toBe(180);
+  const lowMs = performance.now() - toLow;
+  const toHigh = performance.now();
   await page.getByLabel("Quality").selectOption({ label: "360p" });
   await expect(page.getByTestId("current-quality")).toHaveText("1");
   await expect
     .poll(() => video.evaluate((element) => element.videoHeight))
     .toBe(360);
+  const qualityPath = info.outputPath("manual-quality-switch.json");
+  writeFileSync(
+    qualityPath,
+    JSON.stringify({ lowMs, highMs: performance.now() - toHigh }),
+  );
+  await info.attach("manual-quality-switch", {
+    path: qualityPath,
+    contentType: "application/json",
+  });
   await page.getByLabel("Quality").selectOption("auto");
   const audio = page.waitForRequest(/audio\/index\.m3u8/);
   await page.getByLabel("Audio").selectOption({ label: "Alternate" });
@@ -121,6 +133,19 @@ test("recovers from an actual failed segment request and reaches a terminal erro
   await expect(page.getByTestId("status")).toHaveText("error");
   await expect(page.getByTestId("error-code")).toHaveText("manifest");
   await expect(page.getByTestId("recovery")).toHaveText("—");
+
+  await page.route("**/missing/seg404.ts", (route) =>
+    route.fulfill({ status: 404 }),
+  );
+  await page.route("**/missing/index.m3u8", (route) =>
+    route.fulfill({
+      body: "#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nseg404.ts\n#EXT-X-ENDLIST\n",
+    }),
+  );
+  await page.getByLabel("Manifest URL").fill("/missing/index.m3u8");
+  await page.getByRole("button", { name: "Load", exact: true }).click();
+  await expect(page.getByTestId("error-code")).toHaveText("segment");
+  await expect(page.getByTestId("status")).toHaveText("error");
 });
 
 test("authenticated requests send headers to trusted origins and reject expiry, redirects and untrusted children", async ({
@@ -221,6 +246,11 @@ test("authenticated playback applies headers to both the manifest and media segm
     const video = document.createElement("video");
     video.muted = true;
     document.body.append(video);
+    let customCalls = 0;
+    function bypass() {
+      customCalls++;
+      throw new Error("custom loader must not be used in protected mode");
+    }
     const terminal = new Promise((resolve) =>
       controller.subscribe(() => {
         const { status, error, currentTime } = controller.getState();
@@ -234,99 +264,34 @@ test("authenticated playback applies headers to both the manifest and media segm
         allowedOrigins: [location.origin],
         headers: () => ({ "X-Fixture-Token": credential }),
       },
+      hlsConfig: {
+        loader: class {
+          constructor() {
+            bypass();
+          }
+        },
+        fLoader: class {
+          constructor() {
+            bypass();
+          }
+        },
+        pLoader: class {
+          constructor() {
+            bypass();
+          }
+        },
+        xhrSetup: bypass,
+        fetchSetup: bypass,
+      },
     });
     try {
-      return await terminal;
+      return { status: await terminal, customCalls };
     } finally {
       controller.destroy();
       video.remove();
     }
   }, credential);
-  expect(result).toBe("playing");
+  expect(result).toEqual({ status: "playing", customCalls: 0 });
   expect(seen).toContain("/fixtures/low/index.m3u8");
   expect(seen).toContain("/fixtures/low/seg000.ts");
-});
-
-test("repeatable local playback and source-switch benchmark", async ({
-  page,
-}, info) => {
-  test.setTimeout(60_000);
-  await page.addInitScript(() => {
-    const revoke = URL.revokeObjectURL.bind(URL);
-    window.revokedFixtureUrls = new Set();
-    URL.revokeObjectURL = (url) => {
-      window.revokedFixtureUrls.add(url);
-      revoke(url);
-    };
-  });
-  await begin(page);
-  const metrics = page.getByTestId("metrics");
-  const video = page.locator("video");
-  await expect
-    .poll(async () => JSON.parse(await metrics.textContent()).totalFrames)
-    .toBeGreaterThan(10);
-  const vod = JSON.parse(await metrics.textContent());
-  const cdp = await page.context().newCDPSession(page);
-  const heap = async () => {
-    await cdp.send("HeapProfiler.collectGarbage");
-    return (await cdp.send("Runtime.getHeapUsage")).usedSize;
-  };
-  const baselineHeap = await heap();
-  const switches = [];
-  async function clear() {
-    const src = await video.evaluate((element) => element.currentSrc);
-    await page.getByRole("button", { name: "Clear" }).click();
-    await expect(page.getByTestId("status")).toHaveText("idle");
-    await expect
-      .poll(() =>
-        video.evaluate(
-          (element, src) => ({
-            hasSource:
-              element.hasAttribute("src") ||
-              Boolean(element.querySelector("source[src]")),
-            readyState: element.readyState,
-            revoked: window.revokedFixtureUrls.has(src),
-          }),
-          src,
-        ),
-      )
-      .toEqual({ hasSource: false, readyState: 0, revoked: true });
-  }
-  for (let i = 0; i < 5; i++) {
-    await clear();
-    const start = performance.now();
-    await page.getByLabel("Manifest URL").fill(`${fixture}?run=${i}`);
-    await page.getByRole("button", { name: "Load", exact: true }).click();
-    await expect(page.getByTestId("status")).toHaveText("ready");
-    switches.push(Math.round(performance.now() - start));
-  }
-  await page.getByRole("button", { name: "Live fixture" }).click();
-  await expect(
-    page.getByRole("button", { name: "Seek to live" }),
-  ).toBeEnabled();
-  await page.getByRole("button", { name: "Play stream" }).click();
-  await expect
-    .poll(async () => JSON.parse(await metrics.textContent()).liveLatency)
-    .toBeGreaterThanOrEqual(0);
-  const live = JSON.parse(await metrics.textContent());
-  await clear();
-  const finalHeap = await heap();
-  const results = {
-    vod,
-    live,
-    sourceSwitchMs: switches,
-    baselineHeap,
-    finalHeap,
-    heapDeltaBytes: finalHeap - baselineHeap,
-  };
-  expect(vod.startupMs).toBeGreaterThan(0);
-  expect(vod.rebufferRatio).toBeGreaterThanOrEqual(0);
-  expect(vod.rebufferRatio).toBeLessThanOrEqual(1);
-  const evidence = info.outputPath("benchmark.json");
-  writeFileSync(evidence, JSON.stringify(results, null, 2));
-  await info.attach("local-playback-benchmark", {
-    path: evidence,
-    contentType: "application/json",
-  });
-  console.log(JSON.stringify(results));
 });

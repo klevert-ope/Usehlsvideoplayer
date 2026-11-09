@@ -40,6 +40,16 @@ interface Session {
   playRequest: number;
 }
 
+// The two package formats can be loaded into the same realm. Create their
+// shared weak registry lazily and hold a claim until teardown returns.
+const ownershipKey = Symbol.for("usehlsvideoplayer.mediaOwners.v2");
+function getMediaOwners() {
+  const realm = globalThis as typeof globalThis & {
+    [ownershipKey]?: WeakMap<HTMLVideoElement, Source>;
+  };
+  return (realm[ownershipKey] ??= new WeakMap());
+}
+
 function ranges(
   list: TimeRanges,
   old: readonly MediaRange[],
@@ -93,9 +103,34 @@ export function createPlaybackController(
   let source: Source | undefined;
   let revision = 0;
   let destroyed = false;
+  let adapterDepth = 0;
+  let pendingSource: (() => void) | undefined;
+  let pendingDestroy = false;
+  let mutationQueued = false;
   const subscribers = new Set<() => void>();
   const metricSubscribers = new Set<() => void>();
   const events = new Set<(event: PlaybackEvent) => void>();
+
+  function inAdapter<T>(action: () => T): T {
+    adapterDepth++;
+    try {
+      return action();
+    } finally {
+      adapterDepth--;
+    }
+  }
+
+  function queueMutation() {
+    if (mutationQueued) return;
+    mutationQueued = true;
+    queueMicrotask(() => {
+      mutationQueued = false;
+      const next = pendingSource;
+      pendingSource = undefined;
+      if (pendingDestroy) destroy();
+      else next?.();
+    });
+  }
 
   function subscribe<T>(listeners: Set<T>, listener: T): () => void {
     if (destroyed) return () => {};
@@ -160,7 +195,7 @@ export function createPlaybackController(
     session.active = false;
     session.removeListeners?.();
     try {
-      session.engine?.destroy();
+      inAdapter(() => session.engine?.destroy());
     } catch {
       /* Upstream teardown errors must not escape. */
     }
@@ -169,12 +204,23 @@ export function createPlaybackController(
   function release(owner: Source) {
     clearTimeout(owner.timer);
     clearInterval(owner.metricsTimer);
-    stopSession(owner);
+    try {
+      stopSession(owner);
+    } finally {
+      relinquish(owner);
+    }
+  }
+
+  function relinquish(owner: Source) {
+    const owners = getMediaOwners();
+    if (owners.get(owner.video) === owner) owners.delete(owner.video);
   }
 
   function active(owner: Source, session: Session): boolean {
     return (
       !destroyed &&
+      !pendingDestroy &&
+      !pendingSource &&
       source === owner &&
       owner.session === session &&
       session.active
@@ -189,7 +235,8 @@ export function createPlaybackController(
   ) {
     if (!active(owner, session)) return;
     const { video } = owner;
-    const features = session.engine?.features();
+    const features = inAdapter(() => session.engine?.features());
+    if (!active(owner, session)) return;
     const seekable = ranges(video.seekable, state.seekable);
     const lastRange = seekable[seekable.length - 1];
     const duration = Number.isFinite(video.duration) ? video.duration : null;
@@ -257,7 +304,8 @@ export function createPlaybackController(
     const video = owner.video;
     if (owner.session?.ready) owner.resumeAt = video.currentTime;
     stopSession(owner);
-    if (source !== owner || destroyed) return;
+    if (source !== owner || destroyed || pendingDestroy || pendingSource)
+      return;
     if (error.retryable && owner.attempt < limit) {
       owner.attempt++;
       const base = bounded(
@@ -291,6 +339,7 @@ export function createPlaybackController(
       publish({ ...state, status: "recovering", error, recovery });
       if (source === owner) emit({ type: "recovery", recovery });
     } else {
+      relinquish(owner);
       clearInterval(owner.metricsTimer);
       const recovery =
         owner.attempt > 0 ? recoveryState(owner, "exhausted", limit) : null;
@@ -341,17 +390,19 @@ export function createPlaybackController(
         if (active(owner, session)) fail(owner, error);
       });
     try {
-      const engine = factory({
-        video,
-        url,
-        options,
-        changed: () => {
-          if (session.engine) sample(owner, session);
-        },
-        failed: report,
-      });
+      const engine = inAdapter(() =>
+        factory({
+          video,
+          url,
+          options,
+          changed: () => {
+            if (session.engine) sample(owner, session);
+          },
+          failed: report,
+        }),
+      );
       if (!active(owner, session)) {
-        engine?.destroy();
+        inAdapter(() => engine?.destroy());
         return;
       }
       if (!engine) {
@@ -489,9 +540,9 @@ export function createPlaybackController(
           bounded(timeout, 30_000, 1, 120_000),
         );
       }
-      engine.attach();
+      inAdapter(() => engine.attach());
       if (active(owner, session) && recovering && owner.loadRequested)
-        engine.startLoading?.();
+        inAdapter(() => engine.startLoading?.());
     } catch {
       if (active(owner, session))
         fail(owner, failure("setup", session.engine?.kind ?? null));
@@ -503,7 +554,13 @@ export function createPlaybackController(
     src?: string | null,
     options: PlayerOptions = {},
   ) {
-    if (destroyed) return;
+    if (destroyed || pendingDestroy) return;
+    if (adapterDepth) {
+      pendingSource = () => setSource(video, src, options);
+      queueMutation();
+      return;
+    }
+    pendingSource = undefined;
     const current = ++revision;
     const previous = source;
     source = undefined;
@@ -512,7 +569,14 @@ export function createPlaybackController(
     if (state.status !== "idle") publish(initialState());
     if (revision !== current) return;
     publishMetrics(null);
-    if (revision !== current || !video || !src) return;
+    if (
+      revision !== current ||
+      pendingDestroy ||
+      pendingSource ||
+      !video ||
+      !src
+    )
+      return;
     publish(initialState("initialising"));
     if (revision !== current) return;
     const url = sourceUrl(src, video.ownerDocument.baseURI);
@@ -540,6 +604,12 @@ export function createPlaybackController(
       resumeAt: null,
     };
     source = owner;
+    const mediaOwners = getMediaOwners();
+    if (mediaOwners.has(video)) {
+      fail(owner, failure("setup", null));
+      return;
+    }
+    mediaOwners.set(video, owner);
     if (options.metrics) {
       owner.metrics = createMetrics(video);
       owner.metricsTimer = setInterval(() => {
@@ -548,7 +618,8 @@ export function createPlaybackController(
       }, 1000);
       publishMetrics(owner.metrics.read(null));
     }
-    if (source === owner && !destroyed) startSession(owner, false);
+    if (source === owner && !destroyed && !pendingDestroy && !pendingSource)
+      startSession(owner, false);
   }
 
   function command(
@@ -562,7 +633,9 @@ export function createPlaybackController(
     const session = owner?.session;
     if (!owner || !session?.engine || !active(owner, session)) return false;
     try {
-      const applied = action(owner.video, session.engine, owner);
+      const engine = session.engine;
+      const applied = inAdapter(() => action(owner.video, engine, owner));
+      if (!active(owner, session)) return false;
       if (applied) sample(owner, session);
       return applied;
     } catch {
@@ -579,6 +652,28 @@ export function createPlaybackController(
     });
   }
 
+  function destroy() {
+    if (destroyed) return;
+    if (adapterDepth) {
+      pendingDestroy = true;
+      pendingSource = undefined;
+      queueMutation();
+      return;
+    }
+    destroyed = true;
+    pendingDestroy = false;
+    pendingSource = undefined;
+    revision++;
+    const previous = source;
+    source = undefined;
+    if (previous) release(previous);
+    publish(initialState("destroyed"));
+    publishMetrics(null);
+    subscribers.clear();
+    metricSubscribers.clear();
+    events.clear();
+  }
+
   return {
     getState: () => state,
     getMetrics: () => metrics,
@@ -588,7 +683,7 @@ export function createPlaybackController(
     setSource,
     controls: {
       play: () =>
-        source?.session?.engine && source.session.active
+        source?.session?.engine && active(source, source.session)
           ? play(source, source.session)
           : Promise.resolve(false),
       pause: () => {
@@ -672,18 +767,6 @@ export function createPlaybackController(
         return true;
       },
     },
-    destroy() {
-      if (destroyed) return;
-      destroyed = true;
-      revision++;
-      const previous = source;
-      source = undefined;
-      if (previous) release(previous);
-      publish(initialState("destroyed"));
-      publishMetrics(null);
-      subscribers.clear();
-      metricSubscribers.clear();
-      events.clear();
-    },
+    destroy,
   };
 }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -9,12 +9,16 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
+import { get } from "node:http";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { gzipSync } from "node:zlib";
+import { build } from "vite";
+import { tsc } from "./compiler.mjs";
 
 const require = createRequire(import.meta.url);
-const tsc = require.resolve("typescript/bin/tsc");
 const npm = process.env.npm_execpath;
 if (!npm) throw new Error("Run npm run check:package");
 const temp = mkdtempSync(join(tmpdir(), "hls-package-"));
@@ -136,12 +140,42 @@ try {
     "consumer.cts",
   ]);
 
+  async function bundle(symbol) {
+    const path = join(temp, "bundle-entry.mjs");
+    writeFileSync(path, `export { ${symbol} } from "usehlsvideoplayer/core";`);
+    const output = await build({
+      configFile: false,
+      root: temp,
+      logLevel: "silent",
+      build: {
+        write: false,
+        minify: true,
+        lib: { entry: path, formats: ["es"] },
+        rolldownOptions: { external: ["react"] },
+      },
+    });
+    const [chunk] = output[0].output;
+    assert.equal(chunk.type, "chunk");
+    assert.ok(!chunk.imports.includes("react"));
+    assert.doesNotMatch(chunk.code, /useSyncExternalStore|useHlsVideoPlayer/);
+    if (symbol === "selectEngine")
+      assert.doesNotMatch(chunk.code, /MediaSource|lowLatencyMode/);
+    return {
+      bytes: Buffer.byteLength(chunk.code),
+      gzip: gzipSync(chunk.code).length,
+    };
+  }
+  const bundles = {
+    core: await bundle("createPlaybackController"),
+    selectionOnly: await bundle("selectEngine"),
+  };
+
   if (process.env.CHECK_NEXT === "1") {
     install("next@16.4.5");
     mkdirSync(join(temp, "app"));
     writeFileSync(
       join(temp, "next.config.mjs"),
-      'export default { output: "export" };',
+      "export default { turbopack: { root: process.cwd() } };",
     );
     writeFileSync(
       join(temp, "app", "layout.jsx"),
@@ -162,20 +196,94 @@ try {
       }
     `,
     );
-    execFileSync(
+    mkdirSync(join(temp, "app", "runtime"));
+    writeFileSync(
+      join(temp, "app", "runtime", "page.jsx"),
+      `
+      import Player from "../player";
+      export const dynamic = "force-dynamic";
+      export default async function Page({ searchParams }) {
+        return <main data-probe={(await searchParams).probe}><Player src="/fixture.m3u8" /></main>;
+      }
+    `,
+    );
+    const next = join(temp, "node_modules", "next", "dist", "bin", "next");
+    const env = { ...process.env, NEXT_TELEMETRY_DISABLED: "1" };
+    execFileSync(process.execPath, [next, "build"], {
+      cwd: temp,
+      stdio: "inherit",
+      env,
+    });
+    const manifest = JSON.parse(
+      readFileSync(join(temp, ".next", "prerender-manifest.json"), "utf8"),
+    );
+    assert.ok(manifest.routes["/"]);
+    assert.ok(!manifest.routes["/runtime"]);
+    const reservation = createServer();
+    await new Promise((resolve, reject) =>
+      reservation.once("error", reject).listen(0, "127.0.0.1", resolve),
+    );
+    const { port } = reservation.address();
+    await new Promise((resolve) => reservation.close(resolve));
+    const server = spawn(
       process.execPath,
-      [join(temp, "node_modules", "next", "dist", "bin", "next"), "build"],
-      {
-        cwd: temp,
-        stdio: "inherit",
-        env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
-      },
+      [next, "start", "-H", "127.0.0.1", "-p", String(port)],
+      { cwd: temp, stdio: "inherit", env },
     );
-    assert.match(
-      readFileSync(join(temp, "out", "index.html"), "utf8"),
-      /<video data-status="idle"><\/video>/,
+    const exited = new Promise((resolve) => server.once("close", resolve));
+    const base = `http://127.0.0.1:${port}`;
+    function read(path) {
+      return new Promise((resolve, reject) => {
+        const request = get(
+          base + path,
+          { signal: AbortSignal.timeout(12_000) },
+          (response) => {
+            let html = "";
+            response.setEncoding("utf8");
+            response.on("data", (chunk) => {
+              html += chunk;
+            });
+            response.on("end", () =>
+              resolve({ status: response.statusCode, html }),
+            );
+            response.on("error", reject);
+          },
+        );
+        request.on("error", reject);
+      });
+    }
+    try {
+      let ready;
+      let last;
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline && server.exitCode === null) {
+        try {
+          ready = await read("/");
+          if (ready.status === 200) break;
+          last = `HTTP ${ready.status}`;
+        } catch (error) {
+          last = error.code ?? error.name;
+        }
+        await delay(250);
+      }
+      assert.ok(
+        ready?.status === 200,
+        `Next.js production server did not serve the static route (${last ?? "server exited"})`,
+      );
+      assert.match(ready.html, /<video data-status="idle"><\/video>/);
+      const { status, html } = await read(
+        "/runtime?probe=rendered-per-request",
+      );
+      assert.equal(status, 200);
+      assert.match(html, /<main data-probe="rendered-per-request">/);
+      assert.match(html, /<video data-status="idle"><\/video>/);
+    } finally {
+      server.kill();
+      await exited;
+    }
+    console.log(
+      "Next.js 16.4.5 App Router build, static prerender and production SSR passed",
     );
-    console.log("Next.js 16.4.5 App Router build and static prerender passed");
   }
 
   const modules = readdirSync("dist/esm").filter((name) =>
@@ -193,6 +301,7 @@ try {
         esmBytes: javascript.length,
         esmGzipBytes: gzipSync(javascript).length,
         dependenciesBundled: false,
+        browserBundlesIncludingHls: bundles,
         entries: ["root ESM", "root CJS", "core ESM", "core CJS"],
       },
       null,

@@ -51,7 +51,7 @@ The packed root and core entries passed ESM, CommonJS, strict declaration and SS
 
 ## Release gate
 
-The candidate workflow runs package and browser checks before building a tarball and SBOM. Native HLS, external LL-HLS and hosted CI evidence remain qualification gates. The repository maintainer owns dependency review. The hls.js range stays within the verified 1.7 minor because the restricted loader relies on the upstream FetchLoader handoff. The lockfile and automated update PRs support reviewing hls.js advisories and removing the temporary minimatch override when upstream ranges permit.
+The candidate workflow runs hosted package and browser checks, including native HLS, before building a tarball and SBOM. The external LL-HLS smoke test on Windows Chromium used the [Mux sample listed by hls.js](https://github.com/video-dev/hls.js/blob/master/tests/test-streams.js). Playback decoded video and advanced while the live origin advertised partial segments and returned successful blocking playlist reloads. The repository maintainer owns dependency review. The hls.js range stays within the verified 1.7 minor because the restricted loader relies on the upstream FetchLoader handoff. The lockfile and automated update PRs support reviewing hls.js advisories and removing the temporary minimatch override when upstream ranges permit.
 
 The [npm Trusted Publisher](https://docs.npmjs.com/trusted-publishers/) for `usehlsvideoplayer` uses the GitHub owner `klevert-ope`, repository `Usehlsvideoplayer` and workflow filename `publish.yml`. Leave the environment field blank and enable direct `npm publish`. Set this up in the npm package settings once the workflow exists on GitHub. A new trust configuration needs a successful publish within two days.
 

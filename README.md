@@ -2,7 +2,7 @@
 
 Headless HLS playback for an HTML video element. Use the React hooks or the framework-independent TypeScript controller. The library selects hls.js where MSE or Managed Media Source is supported and falls back to browser-native HLS.
 
-The examples below target the 2.0.0 candidate.
+The examples below target version 2.0.0.
 
 ## Quick start
 

@@ -19,5 +19,3 @@ const { videoRef, state, controls } = useHlsPlayer({
 - hls.js debugging is disabled to keep signed URLs out of library diagnostics. Application diagnostics should use structured events.
 - Use the package root in ESM and CommonJS. Deep imports of generated 1.x files are superseded by the explicit root and `/core` entries.
 - The new hook uses a bounded recovery budget. The legacy adapters leave upstream retries in charge, preserving their original recovery behaviour.
-
-These contract changes are tracked as a 2.0.0 candidate.

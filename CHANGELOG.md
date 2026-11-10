@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.1
+
+- Added a shorter React quick start and a usage guide for core playback, live controls, recovery, and authenticated streams.
+- Separated the API reference, browser compatibility, troubleshooting, and migration guides.
+- Restored the build toolchain used for 2.0.0 to fix clean development installs.
+
 ## 2.0.0
 
 - Added an independent playback controller and native and hls.js adapters.

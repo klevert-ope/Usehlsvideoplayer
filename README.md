@@ -1,74 +1,53 @@
 # usehlsvideoplayer
 
-Headless HLS playback for an HTML video element. Use the React hooks or the framework-independent TypeScript controller. The library selects hls.js where MSE or Managed Media Source is supported and falls back to browser-native HLS.
+Play HLS streams in an HTML video element with React hooks or a TypeScript controller. You supply the video element and choose between the browser's controls and your own.
 
-The examples below target version 2.0.0.
+## Play a stream in React
 
-## Quick start
+1. Install the package in a React app. The React entry supports React 18.2 and React 19.
 
-```sh
-npm install usehlsvideoplayer
-```
+   ```sh
+   npm install usehlsvideoplayer
+   ```
 
-The React entry supports React 18.2 and 19. The `/core` entry can be installed without React.
+2. Create `StreamPlayer.tsx` with this component.
 
-```tsx
-"use client";
+   ```tsx
+   "use client";
 
-import { useHlsPlayer } from "usehlsvideoplayer";
+   import { useHlsPlayer } from "usehlsvideoplayer";
 
-export function StreamPlayer({ src }: { src: string }) {
-  const {
-    videoRef,
-    state,
-    controls,
-    quality,
-    audio,
-    subtitles,
-    live,
-    metrics,
-    error,
-  } = useHlsPlayer({ src, autoPlay: false, lowLatency: true });
+   export function StreamPlayer({ src }: { src: string }) {
+     const { videoRef, state, error } = useHlsPlayer({ src });
 
-  return (
-    <>
-      <video ref={videoRef} controls playsInline />
-      <button onClick={() => void controls.play()}>Play</button>
-      <button disabled={!live.canSeekToLive} onClick={controls.seekToLive}>
-        Seek to live
-      </button>
-      <p role="status">{state.status}</p>
-      {error?.fatal && state.status === "error" && (
-        <p role="alert">{error.message}</p>
-      )}
-    </>
-  );
-}
-```
+     return (
+       <>
+         <video ref={videoRef} controls playsInline />
+         <p role="status">{state.status}</p>
+         {state.status === "error" && error && (
+           <p role="alert">{error.message}</p>
+         )}
+       </>
+     );
+   }
+   ```
 
-Give the hook one video element and leave its `src` and `<source>` children unset. Pass a new `src` to replace the stream, or `null` to clear it. For Next.js App Router, put the player in a Client Component as shown above and pass a serializable URL from the Server Component. Server rendering yields an idle snapshot and starts no media requests.
+3. Render `<StreamPlayer src="/streams/master.m3u8" />` where you want the player. Replace the path with a reachable HLS playlist. If the stream uses a different origin, allow your app's origin on the HLS server for hls.js requests.
+4. Once the status reaches `ready`, select **Play** in the video controls. The status changes to `playing` when playback starts.
+
+Pass the playlist URL to the hook. Leave the video's `src` attribute and `<source>` children unset. In Next.js App Router, keep `"use client"` at the top of the player module and pass the URL as a string prop. The server renders the `idle` state. Playback starts in the browser.
 
 ## Framework-independent usage
 
-```ts
-import { createPlaybackController } from "usehlsvideoplayer/core";
-
-const player = createPlaybackController();
-const unsubscribe = player.subscribe(() => render(player.getState()));
-player.setSource(videoElement, "/streams/master.m3u8");
-
-// On teardown
-unsubscribe();
-player.destroy();
-```
+The `usehlsvideoplayer/core` entry works without React. See how to [attach a stream to a video element and release it on teardown](docs/usage.md#play-a-stream-without-react).
 
 ## Documentation
 
-- [API, state transitions and streaming examples](docs/api.md)
-- [Browser compatibility and troubleshooting](docs/compatibility.md)
-- [Migrating from `Usehlsplayer`](docs/migration.md)
-- [Security and authenticated requests](SECURITY.md)
-- [Repository audit and engineering evidence](docs/modernization.md)
+- [Usage guide](docs/usage.md) for source changes, live playback, track selection, recovery, and authenticated streams.
+- [Playback API reference](docs/api.md) for options, commands, state, events, and metrics.
+- [Browser compatibility](docs/compatibility.md) and [playback troubleshooting](docs/troubleshooting.md).
+- [Migrate from 1.x](docs/migration.md) if you use `Usehlsplayer` or `useHlsVideoPlayer`.
+- [Security policy](SECURITY.md) for request policy limits and private vulnerability reporting.
 
 ## Development
 
@@ -83,8 +62,8 @@ npm run fixtures
 npm run dev
 ```
 
-The loopback-only playground plays generated VOD, live, alternate audio and captions. Run `npx playwright install chromium` and `npm run test:browser:chromium` for the MSE suite. Run `npm run test:browser:native` with Playwright WebKit on a system with native HLS support.
+Open the local URL printed by Vite to play generated VOD, live, alternate audio, and captions. See the [engineering record](docs/modernization.md) for browser checks and release notes.
 
 ## License
 
-ISC
+[ISC](LICENSE)

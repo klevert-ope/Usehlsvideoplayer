@@ -1,98 +1,106 @@
-# Playback API
+# Playback API reference
 
 ## React hooks
 
-| Hook                                           | Contract                                                                                                                                                                           |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useHlsPlayer(options)`                        | Owns one video and subscribes to playback and optional metrics. Returns `videoRef`, `store`, `state`, `controls`, `quality`, `audio`, `subtitles`, `live`, `metrics`, and `error`. |
-| `useHlsController(options)`                    | Returns a stable callback ref, the store, and stable controls. Its component does not subscribe to playback updates.                                                               |
-| `usePlaybackState(store, selector?, isEqual?)` | Reads the current snapshot or a selected value. Equality defaults to `Object.is`. Use a pure selector and provide equality when it returns a newly allocated object.               |
-| `useHlsMetrics(store)`                         | Subscribes to the separate metrics store. Returns `null` until collection is enabled and a source is attached.                                                                     |
+The package root exports the hooks and playback types. The React hooks expose an idle server snapshot and attach media after a client render.
 
-```tsx
-import {
-  useHlsController,
-  usePlaybackState,
-  type PlaybackStore,
-} from "usehlsvideoplayer";
+| Hook                                           | Result                                                                                                                                                                                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useHlsPlayer(options)`                        | Returns `videoRef`, `store`, `state`, `controls`, `quality`, `audio`, `subtitles`, `live`, `metrics`, and `error`. The component subscribes to state and metrics.                                                         |
+| `useHlsController(options)`                    | Returns a stable callback `videoRef`, a stable `store`, and stable `controls`. The hook leaves playback and metrics subscriptions to the caller.                                                                          |
+| `usePlaybackState(store, selector?, isEqual?)` | Returns the full snapshot or the result of a pure selector. Equality defaults to `Object.is`. A selector that returns a new object needs an equality function to suppress updates when the selected values are unchanged. |
+| `useHlsMetrics(store)`                         | Subscribes to metrics separately from playback state. Returns `null` until the controller has a source with metrics enabled.                                                                                              |
 
-function Status({ store }: { store: PlaybackStore }) {
-  const status = usePlaybackState(store, (state) => state.status);
-  return <p role="status">{status}</p>;
-}
+## Options
 
-export function Player({ src }: { src: string }) {
-  const { videoRef, store } = useHlsController({ src });
-  return (
-    <>
-      <video ref={videoRef} controls playsInline />
-      <Status store={store} />
-    </>
-  );
-}
-```
+| Option       | Default and effect                                                                                                                                                                                             |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src`        | React only. Omitted, `null`, or an empty string leaves playback idle. The controller resolves relative HTTP or HTTPS URLs against the video's document base URL. A URL with a username or password is invalid. |
+| `onEvent`    | React only. Receives transition, error, and recovery events. Changing the callback preserves the active session. The core controller provides an `onEvent(listener)` method.                                   |
+| `autoPlay`   | `false`. When true, the controller requests playback on first readiness, subject to the browser's autoplay policy.                                                                                             |
+| `lowLatency` | Defaults to the hls.js setting. An explicit value overrides `hlsConfig.lowLatencyMode`. The browser controls latency on the native path.                                                                       |
+| `engine`     | `"auto"` prefers hls.js and falls back to native HLS when hls.js is unavailable. `"hls.js"` and `"native"` require the selected engine. The `request` option requires hls.js.                                  |
+| `metrics`    | `false`. When true, the controller publishes a separate metrics snapshot on attachment and samples it every second.                                                                                            |
+| `recovery`   | Two automatic attempts by default. `false` disables controller recovery. An object overrides the settings below.                                                                                               |
+| `hlsConfig`  | Partial hls.js configuration from trusted application code. See the [security policy](../SECURITY.md) for overrides and limits.                                                                                |
+| `request`    | Off by default. Enables the origin allowlist and optional request headers. `credentials` defaults to `"same-origin"` in this mode. See the [security policy](../SECURITY.md) for the request rules.            |
 
-### Options
+### Recovery options
 
-| Option       | Default and effect                                                                                                                                                                                 |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src`        | No source. Accepts relative or absolute HTTP(S) URLs, resolved against the video's document. Empty or null clears playback.                                                                        |
-| `autoPlay`   | `false`. Requests playback at first readiness. Browser autoplay policy still applies.                                                                                                              |
-| `lowLatency` | Uses the hls.js default when omitted. Setting it overrides `hlsConfig.lowLatencyMode`. Native playback uses browser policy.                                                                        |
-| `engine`     | `"auto"` prefers hls.js, then native. `"hls.js"` and `"native"` require the chosen capability. `request` requires hls.js.                                                                          |
-| `metrics`    | `false`. Enables a separate one-second metrics sample.                                                                                                                                             |
-| `recovery`   | Two automatic attempts after terminal upstream transient errors. Set `false` to disable, or configure attempts (0–5), base delay (default 500 ms), max delay (5 s) and per-attempt timeout (30 s). |
-| `hlsConfig`  | Trusted partial hls.js configuration. Keep nested objects and callbacks stable between renders.                                                                                                    |
-| `request`    | Opt-in credential and origin policy. See [Security](../SECURITY.md).                                                                                                                               |
-| `onEvent`    | Receives synchronous, URL-free transition, error and recovery events. Changing the callback keeps the session.                                                                                     |
+| Field              | Default | Accepted range |
+| ------------------ | ------- | -------------- |
+| `maxAttempts`      | 2       | 0 to 5         |
+| `baseDelayMs`      | 500     | 0 to 30,000    |
+| `maxDelayMs`       | 5,000   | 0 to 60,000    |
+| `attemptTimeoutMs` | 30,000  | 1 to 120,000   |
 
-## Controller and commands
+The controller rounds finite numbers down and clamps them to the accepted range. Omitted and non-finite values use the defaults. The delay grows exponentially with jitter up to `maxDelayMs`. The timeout applies to each recovery attempt.
 
-The root React entry and `usehlsvideoplayer/core` expose types. The core entry exports `createPlaybackController(factory?)` and `selectEngine`. An optional engine factory implements `EngineFactory`, creates an unattached adapter, and gives the controller sole ownership of attaching and destroying it. Use only one controller per media element.
+## Core controller
 
-`setSource(video, src, options)` always replaces the previous session. `setSource(null)` clears it. `destroy()` clears subscribers, releases resources and permanently closes the controller. `subscribe`, `subscribeMetrics` and `onEvent` each return an unsubscribe function. Snapshot reads retain identity until a value changes. Treat snapshots as read-only.
+`usehlsvideoplayer/core` exports the controller, engine selection function, and playback and adapter types. The entry has no React runtime dependency.
 
-Controls return `true` when accepted and `false` when unavailable, invalid or rejected. `play()` resolves to a boolean and reports a browser autoplay rejection as a non-fatal `playback-blocked` error. Track selection confirms an accepted request. The selected rendition may take one or more segments to become current.
+| Method                                              | Contract                                                                                                                       |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `createPlaybackController(factory?)`                | Creates an idle controller. An optional `EngineFactory` returns an unattached adapter or `null` when playback is unsupported.  |
+| `selectEngine(mode, mse, native, requiresMse?)`     | Selects `"hls.js"`, `"native"`, or `null` from the supplied mode and capabilities. `requiresMse` defaults to `false`.          |
+| `setSource(video, src, options?)`                   | Replaces the previous session, even for the same URL. `setSource(null)` clears the session and leaves the controller reusable. |
+| `getState()`, `getMetrics()`                        | Return read-only snapshots. Repeated reads return the same snapshot until the store publishes an update.                       |
+| `subscribe(listener)`, `subscribeMetrics(listener)` | Subscribe to changes in the respective store. The listener takes no arguments. Each method returns an unsubscribe function.    |
+| `onEvent(listener)`                                 | Subscribes to `PlaybackEvent` values and returns an unsubscribe function.                                                      |
+| `destroy()`                                         | Releases media resources, clears subscribers, and closes the controller permanently.                                           |
 
-| Commands                                                        | Semantics                                                                                                                               |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `play()`, `pause()`                                             | Request playback or pause. Use a user gesture when autoplay is blocked.                                                                 |
-| `seek(seconds)`                                                 | Clamps finite seconds to the nearest seekable range, or finite media duration when ranges are unavailable.                              |
-| `setMuted(value)`, `setVolume(value)`, `setPlaybackRate(value)` | Applies a boolean, a volume clamped to 0–1, or a finite positive speed accepted by the browser.                                         |
-| `setQuality(id \| "auto")`                                      | Selects a listed level or restores ABR. Native selection is unavailable.                                                                |
-| `setAudioTrack(id)`, `setSubtitleTrack(id \| "off")`            | Selects IDs from the current snapshot. IDs are scoped to the active track group.                                                        |
-| `seekToLive()`                                                  | Seeks to the advertised sync position, or slightly inside the last native seekable range.                                               |
-| `startLoading()`                                                | Starts hls.js loading, including streams configured with `autoStartLoad: false`.                                                        |
-| `retry()`                                                       | Starts a fresh attempt with a new budget after a terminal error on a retained source. Use a new URL when the old signature has expired. |
+Each video element needs one controller. The controller owns adapter attachment and teardown. An adapter's `destroy()` method releases the media attachment synchronously and cancels any work the adapter started.
 
-### State and events
+## Controls
 
-The snapshot contains a lifecycle `status`, active or last `engine`, current time, finite duration or `null`, buffered and seekable ranges, volume, mute and rate. `quality` separates requested selection from current level. `audio` and `subtitles` describe available tracks and selected IDs. `live` provides nullable detection, edge, sync position and latency estimate in seconds, plus a seek availability flag and a two-second tolerance around the sync target. `error` is a structured failure. `recovery` includes the current attempt, limit, phase and delay.
+Commands return `true` for an accepted request and `false` for an unavailable, invalid, or rejected request. `play()` returns a promise for that result.
 
-The normal path is `idle → initialising → loading → ready → playing`. Browser events may skip ready when playback starts immediately. After readiness, actual playback may enter `paused`, `buffering`, `seeking` or `ended` and resume as media events permit. A fatal retryable failure can move the session to `recovering`, with success returning it to readiness. Non-retryable failure or exhaustion ends in `error`. Replacement goes through `idle`. `destroyed` is absorbing.
+| Command                                                         | Result                                                                                                                                      |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `play()`, `pause()`                                             | Request playback or pause. A browser autoplay rejection from `play()` yields a non-fatal `playback-blocked` error.                          |
+| `seek(seconds)`                                                 | Clamps finite seconds to the nearest seekable range. If no seekable range is available, the command uses the finite duration.               |
+| `setMuted(muted)`, `setVolume(volume)`, `setPlaybackRate(rate)` | Set mute, volume, or playback rate. Volume is clamped to 0 through 1. Playback rate must be finite, positive, and supported by the browser. |
+| `setQuality(level)`                                             | Selects a level ID from the snapshot or restores adaptive bitrate selection with `"auto"`. Available with hls.js when levels exist.         |
+| `setAudioTrack(id)`                                             | Selects an audio track ID from the snapshot. Available with hls.js when tracks exist.                                                       |
+| `setSubtitleTrack(id)`                                          | Selects a subtitle track ID from the snapshot or turns subtitles off with `"off"`.                                                          |
+| `seekToLive()`                                                  | Seeks to the live sync position when a seekable range is available.                                                                         |
+| `startLoading()`                                                | Starts hls.js loading, including when `hlsConfig.autoStartLoad` is false.                                                                   |
+| `retry()`                                                       | Starts a new session with the retained source and a fresh recovery budget. Requires a retained source and `state.status === "error"`.       |
 
-Non-fatal hls.js errors emit diagnostics while its own retry and failover logic runs. Fatal transient failure destroys the old engine before scheduling a new one. The source-wide attempt budget persists across successful recoveries. Recovery attempts time out if playback never reaches readiness. Automatic reload restores the last known position when possible and preserves playback intent. Track choices can revert to stream defaults after reattachment.
+Track and level IDs refer to the choices in the current snapshot. A successful selection accepts the request. Media from the selected rendition may appear after one or more segments.
 
-### Live, quality and recovery
+## State and events
 
-```tsx
-const { controls, state, live, quality } = useHlsPlayer({
-  src: liveManifest,
-  lowLatency: true,
-  recovery: { maxAttempts: 2, baseDelayMs: 500 },
-  onEvent(event) {
-    if (event.type === "recovery") recordRecovery(event.recovery);
-  },
-});
+`PlaybackState` contains `status`, the active or last `engine`, playback time, duration, buffered and seekable ranges, volume, mute, and playback rate. Time and range values are in seconds. Unknown or infinite duration appears as `null`.
 
-// Wire these commands to UI actions.
-const goLive = () => live.canSeekToLive && controls.seekToLive();
-const selectQuality = (id: number | "auto") => controls.setQuality(id);
-const retry = () => state.status === "error" && controls.retry();
-```
+- `quality` reports the available `levels`, selection `mode`, requested `selected` level, and `current` level.
+- `audio` and `subtitles` each report `tracks` and the selected track ID or `null`.
+- `live` reports `isLive`, `edge`, `syncPosition`, and `latency`, each nullable. `canSeekToLive` requires a sync position and a seekable range. `atEdge` is true when playback reaches two seconds before the sync position or later.
+- `error` contains a `PlaybackError` or `null`. A playback error includes a code, fixed message, fatal and retryable flags, the engine or `null`, and an HTTP status when available.
+- `recovery` contains the attempt number, limit, phase, and delay, or `null`.
 
-Map `quality.levels` to your selector and include an Auto option. hls.js and the browser handle decoding, playlist parsing, ABR, LL-HLS protocol, buffer management and discontinuities. Server playlist design controls DVR availability. Live latency is the distance from the player-visible media edge, which can differ from glass-to-glass latency.
+A typical session moves through `idle`, `initialising`, `loading`, `ready`, and `playing`. Media events can skip `ready`. After playback starts, the browser can report `paused`, `buffering`, `seeking`, or `ended`. Source replacement returns to `idle`. Destruction leaves the controller in `destroyed`.
 
-### Metrics
+The controller delivers `PlaybackEvent` values synchronously as it publishes changes or reports failures.
 
-`startupMs` measures from attachment to first playing, including any time waiting for the user. `playingMs`, `rebufferMs` and `rebufferCount` accumulate media-state intervals, excluding startup waits, seeks and explicit recovery. `rebufferRatio` is rebuffer time divided by playing plus rebuffer time. Frame counters depend on `getVideoPlaybackQuality()`. `liveLatency` is an estimate in seconds. Playback time samples from `timeupdate` are capped at four per second. Status and command changes can publish immediately.
+| `type`         | Fields                                                                           |
+| -------------- | -------------------------------------------------------------------------------- |
+| `"transition"` | `from` and `to` contain the previous and next status.                            |
+| `"error"`      | `error` contains the structured failure, including non-fatal hls.js diagnostics. |
+| `"recovery"`   | `recovery` contains the current attempt, limit, delay, and phase.                |
+
+Non-fatal hls.js errors appear as events while hls.js retries or switches renditions. A fatal, retryable error can move the controller to `recovering`. The controller destroys the old engine before it schedules a replacement. The attempt budget applies to the entire source session, including after a successful recovery. Automatic recovery preserves playback intent and restores the last known position when possible. Track choices may revert to stream defaults. Non-retryable errors and exhausted budgets end in `error`.
+
+## Metrics
+
+| Field                          | Measurement                                                                                                                             |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `startupMs`                    | Milliseconds from attachment to first playback, including time spent waiting for viewer input. `null` before first playback.            |
+| `playingMs`                    | Milliseconds in `playing`.                                                                                                              |
+| `rebufferMs`, `rebufferCount`  | Time in `buffering` and entries into `buffering` after first playback. Startup waits, seeks, and explicit recovery are separate states. |
+| `rebufferRatio`                | `rebufferMs / (playingMs + rebufferMs)`, or zero before any measured playback or rebuffering.                                           |
+| `droppedFrames`, `totalFrames` | Counts from `getVideoPlaybackQuality()` when available, otherwise `null`.                                                               |
+| `liveLatency`                  | Estimated seconds between the playback position and the live edge visible to the player, or `null`.                                     |
+
+State samples from `timeupdate` publish at most four times per second. Media events and commands can publish state changes immediately.

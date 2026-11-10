@@ -14,15 +14,7 @@ Report suspected vulnerabilities privately through GitHub Security Advisories wh
 
 Without `request`, hls.js or the native media element uses its normal network behaviour. Native playback can use signed URLs and browser cookies, but cannot receive injected headers or enforce the per-request allowlist. Set native `crossOrigin` on the element before attaching the source when required. Custom hls.js loaders, DRM and interstitials are trusted application integrations. Restricted request mode overrides custom loaders and disables EME and interstitial playback. Allowlisted origins use HTTPS, with HTTP permitted for local loopback development.
 
-```tsx
-const request = {
-  allowedOrigins: ["https://media.example.com"],
-  credentials: "omit" as const,
-  headers: () => ({ Authorization: `Bearer ${getCurrentToken()}` }),
-};
-
-const { videoRef, error } = useHlsPlayer({ src: signedManifest, request });
-```
+See [Send credentials with HLS requests](docs/usage.md#send-credentials-with-hls-requests) for a React example.
 
 Use a stable header provider in a component. A server receiving allowed credentials can read them. The browser and server still control CORS, cookie policy, caching and redirects outside the restricted path. A redirect blocked by Fetch can surface as a generic network or manifest failure because Fetch withholds response details.
 

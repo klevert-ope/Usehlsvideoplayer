@@ -1,24 +1,14 @@
-# Browser compatibility and troubleshooting
+# Browser compatibility
 
-| Environment                                                      | Playback path                       | Feature boundary                                                                                                        |
-| ---------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Chromium or Firefox with supported MSE and codecs                | hls.js                              | ABR, manual quality, audio groups, subtitles, authenticated fetch, VOD and live.                                        |
-| Safari or iOS browsers with a supported hls.js Media Source path | hls.js in auto mode                 | Availability depends on OS and media capabilities.                                                                      |
-| Safari or another browser advertising native HLS                 | Native when selected or as fallback | The browser manages ABR, loading and audio. The library exposes browser text tracks and seekable ranges when available. |
-| Browser with neither HLS path                                    | Unsupported                         | The controller reports a typed error.                                                                                   |
-| Node and Next.js server rendering                                | Inactive                            | Imports and initial snapshots work without browser globals.                                                             |
+`engine: "auto"` selects hls.js when the browser exposes a supported Media Source Extensions (MSE) or Managed Media Source path. Otherwise, it selects native HLS when the browser advertises native support and the options permit it. This choice happens when the controller attaches a source. A failure after attachment follows the recovery rules in the [API reference](api.md#state-and-events).
 
-This table describes capability paths. The [verification record](modernization.md) gives the actual browser coverage. The codec, manifest, transport and platform must all support the stream.
+| Playback path                                         | Available features                                                                                                                                                                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| hls.js on browsers with a supported media source path | Adaptive bitrate selection, manual quality, alternate audio, subtitles, authenticated requests, and live playback. Each stream needs compatible codecs and the relevant playlist entries.                      |
+| Native HLS on browsers that advertise support         | The browser manages quality, loading, and audio. The library exposes available browser subtitle and caption tracks, and seekable ranges. Request header injection and per-request origin rules require hls.js. |
+| No compatible playback path                           | The controller reports `unsupported`.                                                                                                                                                                          |
+| Node or Next.js server rendering                      | Imports and the idle snapshot work without browser globals. Media attachment requires a video element in the browser.                                                                                          |
 
-| Symptom                               | Check                                                                                                                                 |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Stream remains idle                   | Pass a source and attach the ref. Keep the video's own source attribute and children clear.                                           |
-| Stream starts loading but never plays | Use `controls.play()` from a click. If `autoStartLoad` is false, call `controls.startLoading()`.                                      |
-| Unsupported engine                    | Leave `engine` on auto, verify MSE or native HLS, and check the encoded codecs.                                                       |
-| Request fails across origins          | Configure CORS for the manifest, variants, segments, subtitles and keys. With credentialled CORS, allow the exact application origin. |
-| Authentication failure                | Obtain a fresh signed URL or token through the application and replace the source. Native playback may not reveal HTTP status.        |
-| No manual quality or audio options    | Native playback does not expose library-managed rendition selection. Check that the master playlist actually lists alternatives.      |
-| Seek-to-live disabled                 | Wait for a live playlist and a seekable range. Native detection depends on the browser exposing an infinite duration.                 |
-| Metrics remain empty                  | Enable `metrics` on the attachment. Frame quality and latency can remain unavailable on some browsers.                                |
+Safari and iOS browsers can select different paths depending on the OS and media capabilities. The engine check establishes browser capability. Decoding still depends on the stream's codecs and container.
 
-The live playground uses a rolling local transport-stream fixture. It is suitable for lifecycle and DVR checks. LL-HLS needs an origin serving partial segments, blocking reload and compliant holdback values.
+The local playground uses a rolling MPEG-TS live stream. See the [engineering record](modernization.md) for browser test coverage or [playback troubleshooting](troubleshooting.md) for help with a stream.

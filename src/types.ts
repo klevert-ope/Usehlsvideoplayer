@@ -80,7 +80,11 @@ export interface RecoveryState {
   readonly limit: number;
   readonly phase: "scheduled" | "running" | "recovered" | "exhausted";
   readonly delayMs: number;
+  readonly action?: RecoveryAction;
 }
+
+export type RecoveryAction =
+  "restart-loading" | "recover-media" | "recreate" | "refresh-authentication";
 
 export interface PlaybackState {
   readonly status: PlaybackStatus;
@@ -109,6 +113,13 @@ export interface PlaybackMetrics {
   readonly droppedFrames: number | null;
   readonly totalFrames: number | null;
   readonly liveLatency: number | null;
+  readonly sessionMs?: number;
+  readonly recoveryMs?: number;
+  readonly fatalFailures?: number;
+  readonly recoveryAttempts?: number;
+  readonly qualitySwitches?: number;
+  readonly bandwidthEstimate?: number | null;
+  readonly firstFrameMs?: number | null;
 }
 
 export interface PlaybackStore {
@@ -132,6 +143,10 @@ export interface RecoveryOptions {
   baseDelayMs?: number;
   maxDelayMs?: number;
   attemptTimeoutMs?: number;
+  /** Opt-in initial loading deadline, in milliseconds (1–120 seconds). */
+  startupTimeoutMs?: number;
+  /** Opt-in foreground no-progress deadline (1–120 seconds). */
+  stallTimeoutMs?: number;
 }
 
 export interface RequestOptions {
@@ -139,7 +154,29 @@ export interface RequestOptions {
   allowedOrigins: readonly string[];
   credentials?: RequestCredentials;
   /** Called for each allowed request. The URL can contain secrets. */
-  headers?: (url: URL) => HeadersInit | undefined;
+  headers?: (
+    url: URL,
+    context: { readonly signal: AbortSignal },
+  ) => HeadersInit | undefined | Promise<HeadersInit | undefined>;
+  /** Update application-owned credentials; null declines renewal. */
+  refreshAuthentication?: (context: {
+    readonly signal: AbortSignal;
+    readonly httpStatus: number;
+    readonly attempt: number;
+  }) =>
+    | void
+    | null
+    | { readonly src: string }
+    | Promise<void | null | { readonly src: string }>;
+  refreshStatusCodes?: readonly (401 | 403)[];
+  refreshTimeoutMs?: number;
+}
+
+export interface QualityPreferences {
+  maxHeight?: number;
+  /** Advertised bits per second, not a network transfer limit. */
+  maxBitrate?: number;
+  startBitrate?: number;
 }
 
 export interface PlayerOptions {
@@ -149,6 +186,7 @@ export interface PlayerOptions {
   metrics?: boolean;
   recovery?: false | RecoveryOptions;
   request?: RequestOptions;
+  quality?: QualityPreferences;
   /** Trusted application configuration. See SECURITY.md for escape hatches. */
   hlsConfig?: Partial<HlsConfig>;
 }

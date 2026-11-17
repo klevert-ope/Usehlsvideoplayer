@@ -1,4 +1,7 @@
 import Hls from "hls.js";
+import { abortable } from "./async.js";
+import { qualitySelection } from "./quality.js";
+import { selectEngine } from "./engine-selection.js";
 import { classifyHlsError, failure, sourceUrl } from "./errors.js";
 import type {
   EngineKind,
@@ -10,6 +13,7 @@ import type {
 } from "./types.js";
 
 export interface EngineFeatures {
+  readonly bandwidthEstimate?: number | null;
   readonly quality?: QualityState;
   readonly audio?: TrackState;
   readonly subtitles?: TrackState;
@@ -37,24 +41,19 @@ export interface PlaybackEngine {
   selectAudio?(id: number): void;
   selectSubtitle?(id: number | "off"): void;
   startLoading?(): void;
+  /** Return false when recovery is unavailable; the controller reconstructs. */
+  recover?(action: "restart-loading" | "recover-media"): boolean;
 }
 
 export type EngineFactory = (context: EngineContext) => PlaybackEngine | null;
 
-export function selectEngine(
-  mode: PlayerOptions["engine"],
-  mse: boolean,
-  native: boolean,
-  requiresMse = false,
-): EngineKind | null {
-  if (mode !== "native" && mse) return "hls.js";
-  if (mode !== "hls.js" && !requiresMse && native) return "native";
-  return null;
-}
-
 const policyMarker = "HLS_REQUEST_POLICY";
 
-function requestPolicy(policy: RequestOptions, source: URL) {
+function requestPolicy(
+  policy: RequestOptions,
+  source: URL,
+  lifetime: AbortSignal,
+) {
   const allowed = new Set(policy.allowedOrigins);
   if (
     !allowed.has(source.origin) ||
@@ -75,11 +74,25 @@ function requestPolicy(policy: RequestOptions, source: URL) {
   ): Promise<Request> => {
     const target = sourceUrl(url, source.href);
     if (!target || !allowed.has(target.origin)) throw new Error(policyMarker);
+    const pending = new AbortController();
+    const abort = () => pending.abort();
+    const signals = [lifetime, init.signal].filter(
+      (signal): signal is AbortSignal => Boolean(signal),
+    );
+    for (const signal of signals) {
+      if (signal.aborted) pending.abort();
+      else signal.addEventListener("abort", abort, { once: true });
+    }
     try {
+      if (pending.signal.aborted) throw new Error(policyMarker);
       const headers = new Headers(init.headers);
-      new Headers(policy.headers?.(new URL(target.href))).forEach(
-        (value, name) => headers.set(name, value),
+      const supplied = await abortable(
+        policy.headers?.(new URL(target.href), { signal: pending.signal }),
+        pending.signal,
       );
+      if (pending.signal.aborted || !allowed.has(target.origin))
+        throw new Error(policyMarker);
+      new Headers(supplied).forEach((value, name) => headers.set(name, value));
       return new Request(target.href, {
         ...init,
         headers,
@@ -90,6 +103,8 @@ function requestPolicy(policy: RequestOptions, source: URL) {
       });
     } catch {
       throw new Error(policyMarker);
+    } finally {
+      for (const signal of signals) signal.removeEventListener("abort", abort);
     }
   };
 }
@@ -102,7 +117,17 @@ function hlsEngine({
   failed,
 }: EngineContext): PlaybackEngine {
   const policy = options.request;
-  const fetchSetup = policy && requestPolicy(policy, url);
+  const lifetime = new AbortController();
+  const fetchSetup = policy && requestPolicy(policy, url, lifetime.signal);
+  let loadRequested = options.hlsConfig?.autoStartLoad !== false;
+  const validPreference = (value: number | undefined) =>
+    value !== undefined && Number.isFinite(value) && value > 0;
+  const quality =
+    options.quality && Object.values(options.quality).some(validPreference)
+      ? options.quality
+      : undefined;
+  const hasCaps =
+    validPreference(quality?.maxHeight) || validPreference(quality?.maxBitrate);
   const kind = "hls.js";
   const rejectPolicy = policy && !fetchSetup;
   const defaultLoader = Hls.DefaultConfig.loader;
@@ -110,6 +135,13 @@ function hlsEngine({
     ? null
     : new Hls({
         ...options.hlsConfig,
+        ...(quality ? { autoStartLoad: false, minAutoBitrate: 0 } : {}),
+        ...(hasCaps
+          ? {
+              capLevelToPlayerSize: false,
+              capLevelOnFPSDrop: false,
+            }
+          : {}),
         ...(options.lowLatency === undefined
           ? {}
           : { lowLatencyMode: options.lowLatency }),
@@ -131,6 +163,16 @@ function hlsEngine({
   let live: EngineFeatures["live"];
   let metadata: EngineFeatures = {};
 
+  function applyQuality(startup = false) {
+    if (!hls || !quality || !hls.levels.length) return;
+    const { cap, start } = qualitySelection(hls.levels, quality);
+    hls.autoLevelCapping = cap;
+    if (startup) {
+      if (start !== undefined) hls.startLevel = start;
+      else if (cap >= 0 && hls.startLevel > cap) hls.startLevel = cap;
+    }
+  }
+
   function refresh() {
     if (!active || !hls) return;
     const tracks = (
@@ -145,6 +187,9 @@ function hlsEngine({
       selected: index < 0 ? null : index,
     });
     metadata = {
+      bandwidthEstimate: Number.isFinite(hls.bandwidthEstimate)
+        ? hls.bandwidthEstimate
+        : null,
       quality: {
         levels: hls.levels.map(({ bitrate, width, height }, id) => ({
           id,
@@ -182,6 +227,11 @@ function hlsEngine({
         return;
       }
       const events = Hls.Events;
+      hls.on(events.MANIFEST_PARSED, () => {
+        applyQuality(true);
+        if (quality && loadRequested && active) hls.startLoad();
+      });
+      hls.on(events.LEVELS_UPDATED, () => applyQuality());
       for (const event of [
         events.MANIFEST_PARSED,
         events.LEVELS_UPDATED,
@@ -200,22 +250,39 @@ function hlsEngine({
       hls.on(events.ERROR, (_event, data) => {
         if (!active) return;
         const error =
-          data.response?.text === policyMarker
+          policy &&
+          data.response?.code === 0 &&
+          data.response.text === policyMarker
             ? failure("request-policy", kind)
             : classifyHlsError(data);
-        failed(error);
+        // A denied request must stop before upstream can keep trying other renditions.
+        failed(
+          policy && error.code === "authentication"
+            ? { ...error, fatal: true }
+            : error,
+        );
       });
       hls.loadSource(url.href);
       if (active) hls.attachMedia(video);
     },
     destroy() {
       active = false;
+      lifetime.abort();
       hls?.destroy();
     },
-    features: () => metadata,
+    features: () =>
+      options.metrics && hls
+        ? {
+            ...metadata,
+            bandwidthEstimate: Number.isFinite(hls.bandwidthEstimate)
+              ? hls.bandwidthEstimate
+              : null,
+          }
+        : metadata,
     selectQuality(level) {
       if (!hls) return;
       hls.nextLevel = level === "auto" ? -1 : level;
+      if (level === "auto") applyQuality();
       refresh();
     },
     selectAudio(id) {
@@ -229,7 +296,21 @@ function hlsEngine({
       hls.subtitleDisplay = id !== "off";
       refresh();
     },
-    startLoading: () => hls?.startLoad(),
+    startLoading: () => {
+      loadRequested = true;
+      if (!quality || hls?.levels.length) hls?.startLoad();
+    },
+    recover(action) {
+      if (!active || !hls || !hls.levels.length) return false;
+      if (action === "recover-media") {
+        if (video.error?.code !== 3) return false;
+        hls.recoverMediaError();
+      } else {
+        hls.stopLoad();
+        hls.startLoad(video.currentTime);
+      }
+      return true;
+    },
   };
 }
 

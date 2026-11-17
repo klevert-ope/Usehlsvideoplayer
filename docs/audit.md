@@ -1,5 +1,7 @@
 # Repository audit
 
+This audit records the initial implementation. Its findings and test counts describe the starting revisions below. See the [upgrade verification report](verification-report.md) for the current upgrade and remaining qualification.
+
 The starting point was commit `d195bf1` plus a working tree with an updated hook, TypeScript build, and five jsdom regressions. The existing staged cleanup removed 531 paths, primarily checked-in dependencies and package output.
 
 | Severity | Location                                   | Finding                                                                                                                                                                                                                                  |

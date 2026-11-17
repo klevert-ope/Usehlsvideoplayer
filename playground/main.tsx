@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useHlsPlayer } from "../src/index.js";
+import type { PlaybackEvent } from "../src/types.js";
 import "./style.css";
 
 const vod = "/fixtures/master.m3u8";
@@ -29,6 +30,24 @@ function Player() {
         : vod,
   );
   const [draft, setDraft] = useState(src ?? "");
+  const [maxHeight, setMaxHeight] = useState<number | undefined>();
+  const [events, setEvents] = useState<PlaybackEvent[]>([]);
+  const token = useRef("expired-demo");
+  const demoCount = useRef(0);
+  const demoRequest = useMemo(
+    () => ({
+      allowedOrigins: [location.origin],
+      headers: async (_url: URL, { signal }: { signal: AbortSignal }) => {
+        signal.throwIfAborted();
+        return { "X-Fixture-Token": token.current };
+      },
+      refreshAuthentication: async ({ signal }: { signal: AbortSignal }) => {
+        signal.throwIfAborted();
+        token.current = "renewed-demo";
+      },
+    }),
+    [],
+  );
   const {
     videoRef,
     state,
@@ -47,6 +66,10 @@ function Player() {
       ? { baseDelayMs: 100, maxAttempts: 2, attemptTimeoutMs: 5000 }
       : undefined,
     hlsConfig: testConfig,
+    quality: maxHeight === undefined ? undefined : { maxHeight },
+    request: src?.startsWith("/auth-fixture/") ? demoRequest : undefined,
+    onEvent: (event) =>
+      setEvents((previous) => [...previous.slice(-19), event]),
   });
 
   return (
@@ -86,6 +109,17 @@ function Player() {
           Live fixture
         </button>
         <button onClick={() => setSource(null)}>Clear</button>
+        <button
+          onClick={() => {
+            token.current = "expired-demo";
+            const next = `/auth-fixture/manifest.m3u8?session=${++demoCount.current}`;
+            setDraft(next);
+            setSource(next);
+            setEvents([]);
+          }}
+        >
+          Test credential renewal
+        </button>
       </div>
       <video ref={videoRef} controls muted playsInline />
       <div className="row">
@@ -99,6 +133,23 @@ function Player() {
         </button>
       </div>
       <div className="row">
+        <label>
+          Automatic resolution preference{" "}
+          <select
+            value={maxHeight ?? "unlimited"}
+            onChange={(event) =>
+              setMaxHeight(
+                event.target.value === "unlimited"
+                  ? undefined
+                  : Number(event.target.value),
+              )
+            }
+          >
+            <option value="unlimited">Upstream defaults</option>
+            <option value="180">Prefer up to 180p</option>
+            <option value="360">Prefer up to 360p</option>
+          </select>
+        </label>
         <label>
           Quality{" "}
           <select
@@ -181,6 +232,10 @@ function Player() {
       <details>
         <summary>Playback metrics</summary>
         <pre data-testid="metrics">{JSON.stringify(metrics)}</pre>
+      </details>
+      <details>
+        <summary>Recent recovery and playback events</summary>
+        <pre>{JSON.stringify(events, null, 2)}</pre>
       </details>
     </main>
   );

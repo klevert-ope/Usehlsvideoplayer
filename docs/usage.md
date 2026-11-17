@@ -1,5 +1,7 @@
 # Use the player
 
+This guide follows the current repository. Credential renewal, recovery deadlines, quality preferences, and extended metrics are [unreleased](../CHANGELOG.md#unreleased).
+
 ## Play a stream without React
 
 Import from `usehlsvideoplayer/core`. Pass a video element with no `src` or `<source>` children, and an element for the status. Call the returned cleanup function before removing the player.
@@ -84,9 +86,28 @@ Use `quality.current` to display the level in use. The requested level can take 
 - If the browser blocks autoplay, call `controls.play()` from a click or let the viewer use the video controls.
 - While `state.status` is `"recovering"`, show progress and let the controller finish its automatic attempts.
 - If `state.status` is `"error"` and the URL and configuration still apply, offer `controls.retry()`. A return value of `true` means the controller started a fresh attempt.
-- If the URL expired, get a fresh URL and replace `src`. If credentials expired, refresh them through your application before starting another attempt.
+- If credentials expire, configure [credential renewal](#renew-application-owned-credentials), or refresh them through your application and replace `src` when needed.
 
 To collect diagnostics, use `onEvent` for transitions, errors, and recovery. For playback measurements, set `metrics: true`.
+
+### Bound initial loading and playback stalls
+
+Enable controller deadlines when a stream must stop waiting after a bounded interval.
+
+```tsx
+const player = useHlsPlayer({
+  src,
+  recovery: {
+    maxAttempts: 2,
+    startupTimeoutMs: 20_000,
+    stallTimeoutMs: 15_000,
+  },
+});
+```
+
+The startup deadline runs until readiness. With `hlsConfig.autoStartLoad: false`, it waits for `controls.startLoading()`. The stall deadline watches media-time progress after readiness and suspends while paused, seeking, ended, or hidden. Both share the source's recovery budget. They are disabled by default; `recovery: false` disables them and automatic credential renewal.
+
+Use `state.recovery?.action` to distinguish a loading restart, decoder recovery, reconstruction, or authentication renewal. Recovery finishes when requested playback advances, or when deliberately paused playback is ready. See the [recovery reference](api.md#optional-reliability-controls) for limits.
 
 ## Subscribe to part of the playback state
 
@@ -159,3 +180,56 @@ export function ProtectedPlayer({
 Replace the example origin with the media origin and pass a stable `getAccessToken` function that reads the current token. The header callback in this example sends the token to every allowed origin. If different origins need different credentials, use the callback's URL argument to decide which headers to return.
 
 For cross-origin requests, allow your app's origin and the `Authorization` header in the server's CORS response. For cookie authentication across origins, use `credentials: "include"` and configure the server to allow credentials for the exact app origin. For native playback, use a signed URL or browser-managed cookies. See the [security policy](../SECURITY.md) for request and credential limits.
+
+## Renew application-owned credentials
+
+Supply stable callbacks from your authentication module. `getAccessToken` should proactively renew an expiring token and honour cancellation; `refreshAccessToken` handles unexpected denial. The application owns coordination across players.
+
+```ts
+import {
+  createPlaybackController,
+  type RequestOptions,
+} from "usehlsvideoplayer/core";
+
+export function attachProtectedStream(
+  video: HTMLVideoElement,
+  src: string,
+  getAccessToken: (signal: AbortSignal) => Promise<string>,
+  refreshAccessToken: (signal: AbortSignal) => Promise<void>,
+) {
+  const request: RequestOptions = {
+    allowedOrigins: ["https://media.example.com"],
+    credentials: "omit",
+    headers: async (_url, { signal }) => ({
+      Authorization: `Bearer ${await getAccessToken(signal)}`,
+    }),
+    refreshAuthentication: async ({ signal }) => {
+      await refreshAccessToken(signal);
+    },
+  };
+  const player = createPlaybackController();
+  player.setSource(video, src, { request, recovery: { maxAttempts: 2 } });
+  return () => player.destroy();
+}
+```
+
+For a renewed signed manifest, return `{ src: renewedUrl }`; its origin must remain allowed. Return `null` for permanent denial. Include `403` in `refreshStatusCodes` only if your server uses it for expiry. Never call `retry()` automatically on every error event: that resets the budget and can create an application-level loop.
+
+React and Next.js client components can pass the same request object to `useHlsPlayer`. Keep callback identities stable. Obtain credentials from an authenticated application endpoint; never embed signing keys in browser code. Native HLS still requires application-driven signed-source replacement.
+
+## Prefer lower data use
+
+```tsx
+const player = useHlsPlayer({
+  src,
+  quality: { maxHeight: 720, maxBitrate: 2_000_000, startBitrate: 500_000 },
+});
+```
+
+hls.js ABR remains enabled. Bitrates are advertised bits per second. Preferences have a lowest-rendition fallback; manual selection can override them. Call `controls.setQuality("auto")` to reapply the cap. These preferences do not impose a hard data-transfer limit, and native HLS ignores them. See [quality preference precedence](api.md#automatic-quality-preferences) when combining them with `hlsConfig`.
+
+For live tuning, use `lowLatency` and upstream latency configuration, then measure the actual encoder and CDN. Avoid aggressive catch-up for viewers intentionally watching DVR content.
+
+## Bridge application telemetry
+
+Subscribe to `onEvent` and `subscribeMetrics` when your application enables telemetry. Map fixed error codes, recovery actions and numeric metrics to existing OpenTelemetry instruments; keep the exporter dependency in the application. Do not attach source URLs, headers, raw errors or manifest labels. Unsubscribe on teardown and avoid persistent user identifiers by default.

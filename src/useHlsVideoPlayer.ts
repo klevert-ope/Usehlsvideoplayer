@@ -54,17 +54,20 @@ function sameOptions(a: PlayerOptions, b: PlayerOptions): boolean {
     hlsConfig: hlsA,
     request: requestA,
     recovery: recoveryA,
+    quality: qualityA,
     ...simpleA
   } = a;
   const {
     hlsConfig: hlsB,
     request: requestB,
     recovery: recoveryB,
+    quality: qualityB,
     ...simpleB
   } = b;
   return (
     equalFields(simpleA, simpleB) &&
     equalFields(hlsA, hlsB) &&
+    equalFields(qualityA, qualityB) &&
     (recoveryA === false || recoveryB === false
       ? recoveryA === recoveryB
       : equalFields(recoveryA, recoveryB)) &&
@@ -74,6 +77,14 @@ function sameOptions(a: PlayerOptions, b: PlayerOptions): boolean {
         requestB &&
         requestA.credentials === requestB.credentials &&
         requestA.headers === requestB.headers &&
+        requestA.refreshAuthentication === requestB.refreshAuthentication &&
+        requestA.refreshTimeoutMs === requestB.refreshTimeoutMs &&
+        (requestA.refreshStatusCodes ?? [401]).length ===
+          (requestB.refreshStatusCodes ?? [401]).length &&
+        (requestA.refreshStatusCodes ?? [401]).every(
+          (code, index) =>
+            code === (requestB.refreshStatusCodes ?? [401])[index],
+        ) &&
         requestA.allowedOrigins.length === requestB.allowedOrigins.length &&
         requestA.allowedOrigins.every(
           (origin, index) => origin === requestB.allowedOrigins[index],
@@ -113,7 +124,22 @@ function useSession(
       sameOptions(last.options, config)
     )
       return;
-    previous.current = { video, src, options: config };
+    previous.current = {
+      video,
+      src,
+      options: {
+        ...config,
+        quality: config.quality && { ...config.quality },
+        recovery: config.recovery && { ...config.recovery },
+        request: config.request && {
+          ...config.request,
+          allowedOrigins: [...config.request.allowedOrigins],
+          refreshStatusCodes: config.request.refreshStatusCodes && [
+            ...config.request.refreshStatusCodes,
+          ],
+        },
+      },
+    };
     controller.setSource(video, src, config);
   });
 

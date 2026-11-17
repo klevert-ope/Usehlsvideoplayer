@@ -1,4 +1,7 @@
 import { defineConfig } from "vite";
+import { llFixture } from "./scripts/ll-fixture.mjs";
+import { encryptedFixture } from "./scripts/encrypted-fixture.mjs";
+import { readFileSync } from "node:fs";
 
 const boot = Date.now();
 export default defineConfig({
@@ -6,6 +9,31 @@ export default defineConfig({
     {
       name: "local-live-fixture",
       configureServer(server) {
+        server.middlewares.use(
+          "/auth-fixture/manifest.m3u8",
+          (request, response) => {
+            if (request.headers["x-fixture-token"] !== "renewed-demo") {
+              response.writeHead(401).end();
+              return;
+            }
+            response
+              .writeHead(200, {
+                "Content-Type": "application/vnd.apple.mpegurl",
+                "Cache-Control": "no-store",
+              })
+              .end(
+                readFileSync("public/fixtures/low/index.m3u8", "utf8").replace(
+                  /seg\d+\.ts/g,
+                  (name) => `/fixtures/low/${name}`,
+                ),
+              );
+          },
+        );
+        server.middlewares.use("/encrypted", encryptedFixture(boot));
+        server.middlewares.use("/fixture-revision", (_request, response) => {
+          response.end(process.env.GITHUB_SHA ?? "local");
+        });
+        server.middlewares.use("/live/ll.m3u8", llFixture(boot));
         server.middlewares.use("/live/stream.m3u8", (_req, res) => {
           const sequence = Math.floor((Date.now() - boot) / 1000);
           const segments = Array.from({ length: 6 }, (_, offset) => {

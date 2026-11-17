@@ -34,3 +34,11 @@ If you keep a legacy adapter, update any code that reads raw hls.js response dat
 The new hook makes up to two automatic recovery attempts by default. To keep the legacy recovery behaviour, set `recovery: false` and leave retries to the engine.
 
 Replace deep imports of generated 1.x files with the package root for React or `usehlsvideoplayer/core` for the controller. Both entries support ESM and CommonJS. See the [API reference](api.md) for options and commands.
+
+## Adopt the unreleased additions
+
+Existing synchronous header callbacks remain valid, including callbacks that accept only the URL. Asynchronous providers can accept a second `{ signal }` argument and return a promise. Authentication renewal is opt-in, consumes the existing recovery budget, and cannot widen `allowedOrigins`.
+
+Startup and stall deadlines are disabled unless configured. Automatic quality preferences and additional metrics are optional. Existing event `type` values are unchanged, and new diagnostic fields are optional in public types. Custom adapters can omit `recover(action)`; the controller reconstructs them when recovery is needed.
+
+These APIs are not part of 2.0.1. See the [Unreleased changelog](../CHANGELOG.md#unreleased) and [usage guide](usage.md) before adopting them.

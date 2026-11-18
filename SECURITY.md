@@ -32,4 +32,4 @@ Proactive renewal and cross-player coordination belong in the application. Do no
 
 CI installs locked dependencies with lifecycle scripts disabled, audits npm packages and validates the packed exports in isolated consumers. Automated update PRs cover npm and GitHub Actions. The candidate workflow builds a tarball and runtime SBOM after fast and browser checks.
 
-The GitHub publishing workflow requires physical Android qualification for the tagged commit and uses the `npm-release` environment. Configure required reviewers in GitHub and bind the environment in npm Trusted Publishing. A local maintainer publish uses npm account authentication and records its verification results in the release evidence. See [qualification and release setup](docs/qualification.md).
+Maintainers publish from a local machine using npm account authentication and record the verification results with the release. The Android qualification workflow records physical device results separately. See [playback qualification and release](docs/qualification.md).

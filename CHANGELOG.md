@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Moved npm publication to the local maintainer procedure. GitHub Actions still validates and packages release candidates.
+
 ## 2.1.0
 
 - Added bounded loading and decoder recovery with optional startup and stall deadlines.
@@ -10,7 +14,7 @@
 - Fixed interrupted and browser-blocked play requests being reported as unknown errors when the video belongs to another window.
 - Hardened media-element ownership across ESM and CommonJS, reentrant source changes, and stale callbacks.
 - Hardened restricted requests against custom-loader bypass, redirects, forbidden child resources, and spoofed policy errors.
-- The GitHub publishing workflow requires the package and desktop browser suites and a successful physical Android check for the tagged commit.
+- Added a GitHub publishing workflow that required the package and desktop browser suites and a successful physical Android check for the tagged commit.
 - Added isolated lockfile installation, strict declaration consumers, React-free core checks, tree-shaking checks, and Next.js production SSR verification.
 - Split the TypeScript 7 build compiler from the TypeScript 6 compiler API used by ESLint and refreshed compatible development dependencies.
 

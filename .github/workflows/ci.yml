@@ -64,16 +64,7 @@ jobs:
       - name: Install FFmpeg
         if: steps.media-cache.outputs.cache-hit != 'true'
         timeout-minutes: 2
-        run: |
-          if ! command -v ffmpeg >/dev/null; then
-            sources="$RUNNER_TEMP/ffmpeg.sources"
-            sed -E 's@https?://[^ ]*ec2\.archive\.ubuntu\.com/ubuntu/?@https://archive.ubuntu.com/ubuntu/@g' \
-              /etc/apt/sources.list.d/ubuntu.sources > "$sources"
-            apt_options=(-o Dir::Etc::sourcelist="$sources" -o Dir::Etc::sourceparts=-
-                         -o Acquire::Retries=2 -o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10)
-            sudo apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
-            sudo apt-get "${apt_options[@]}" install -y --no-install-recommends ffmpeg
-          fi
+        run: bash scripts/ci-install-media.sh ffmpeg
       - if: steps.media-cache.outputs.cache-hit != 'true'
         run: node scripts/fixtures.mjs
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -118,9 +109,12 @@ jobs:
         with:
           name: playback-fixtures
           path: public/fixtures
-      - if: matrix.browser == 'firefox'
+      - name: Install Firefox decoder and Playwright browser
+        if: matrix.browser == 'firefox'
         timeout-minutes: 2
-        run: node node_modules/@playwright/test/cli.js install firefox
+        run: |
+          bash scripts/ci-install-media.sh libavcodec60
+          node node_modules/@playwright/test/cli.js install firefox
       - name: Run browser tests
         id: browser-tests
         run: node node_modules/@playwright/test/cli.js test --project=${{ matrix.project }} --workers=2

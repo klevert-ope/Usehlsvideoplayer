@@ -1,6 +1,12 @@
 # Engineering upgrade verification
 
-This historical report records two successful 30-minute workloads and the release requirements at the time of measurement. The [qualification runbook](qualification.md) defines the current release checks.
+This report records the 2.1.0 release checks and two earlier 30-minute workloads. The [qualification runbook](qualification.md) defines the current release checks.
+
+## Version 2.1.0 checks
+
+The release candidate at `4f6be01` passed all 38 unit tests. Chrome, Edge and Firefox passed in GitHub Actions. The local tarball passed the React 18.2 and 19.3 package checks and the Next.js production SSR check. The runtime dependency audit found zero vulnerabilities.
+
+The full CI audit failed on `picomatch`, a transitive dependency of the development tools. Physical Android qualification did not run because the repository had no registered runner. The 2.1.0 release uses the local maintainer procedure. [CI run](https://github.com/klevert-ope/Usehlsvideoplayer/actions/runs/44255597395) · [npm advisory](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)
 
 ## Documentation and branch reconciliation
 

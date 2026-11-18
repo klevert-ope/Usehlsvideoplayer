@@ -17,8 +17,15 @@ Set `PUBLIC_LL_HLS` to a public LL-HLS manifest to check an origin's partial seg
 
 Register the `hls-device-android` runner with a physical Android device, Chrome, FFmpeg and Appium UiAutomator2. Restrict its runner group to the qualification workflow on protected `master`. Set `DEVICE_DRIVER` to the WebDriver endpoint, `DEVICE_CAPABILITIES` to the Android Chrome capability object with its physical UDID, and `DEVICE_FIXTURE_ORIGIN` to the runner's private LAN origin on port 4175 as reachable by the device. The probe checks the fixture revision, presented frames, engine and teardown.
 
-## Release approval
+## Publish through GitHub Actions
 
 1. Configure tag protection and the protected `npm-release` environment with required reviewers and self-approval disabled. Remove any older publisher or long-lived token that could bypass approval. Bind the repository, `publish.yml` and that environment in [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/).
-2. Run **Android playback qualification** on the candidate commit on protected `master` and inspect the device artefact. Publishing requires a successful Android job from that repository, workflow and exact commit.
+2. Run **Android playback qualification** on the candidate commit on protected `master` and inspect the device artefact. The workflow checks the repository, workflow, commit and successful Android job.
 3. After approval, create the tag matching the stable package version and dispatch **Publish to npm** against it with `gh workflow run publish.yml --ref vX.Y.Z -f qualification_run=RUN_ID`. Package and desktop browser checks run again on that tag before the candidate tarball is built. Review the protected deployment before approving publication.
+
+## Publish from a maintainer's machine
+
+1. Push the release commit. Check out that commit with a clean working tree and run `npm ci --ignore-scripts`. Run the package checks and record any failed or unrun checks, including physical Android qualification.
+2. Run `npm pack --json` and record the tarball name and integrity. Inspect the file list before publishing.
+3. Run `npm login --auth-type=web` if the npm session has expired. Publish the tarball with `npm publish ./usehlsvideoplayer-X.Y.Z.tgz --ignore-scripts --access public --tag latest`, substituting the release version. Complete npm's browser approval if prompted.
+4. Run `npm view usehlsvideoplayer@X.Y.Z dist.integrity` and compare the value with `npm pack`. Run `npm dist-tag ls usehlsvideoplayer` to confirm the `latest` tag. Tag the published commit with the matching `vX.Y.Z` Git tag and push it.

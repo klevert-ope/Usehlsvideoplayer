@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       qualification_run:
-        description: Successful Extended playback qualification run ID for this exact commit
+        description: Successful Android playback qualification run ID for this exact commit
         required: true
         type: string
 

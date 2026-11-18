@@ -1,6 +1,6 @@
 # Use the player
 
-This guide follows the current repository. Credential renewal, recovery deadlines, quality preferences, and extended metrics are [unreleased](../CHANGELOG.md#unreleased).
+Credential renewal, recovery deadlines, quality preferences, and extended metrics require [2.1.0 or later](../CHANGELOG.md#210).
 
 ## Play a stream without React
 

@@ -592,7 +592,9 @@ export function createPlaybackController(
     } catch (cause) {
       if (active(owner, session) && session.playRequest === request) {
         const name =
-          cause instanceof Object && "name" in cause ? cause.name : "";
+          typeof cause === "object" && cause !== null && "name" in cause
+            ? cause.name
+            : "";
         if (name === "AbortError") return false;
         owner.wantsPlay = false;
         const error = failure(

@@ -1,4 +1,4 @@
-// Synthetic AES-128 HLS for retention tests. This public test key is not a secret.
+// Synthetic AES-128 HLS with a distinct key URI for each segment. This public test key is not a secret.
 import { createCipheriv } from "node:crypto";
 import { readFileSync } from "node:fs";
 const key = Buffer.from("000102030405060708090a0b0c0d0e0f", "hex");

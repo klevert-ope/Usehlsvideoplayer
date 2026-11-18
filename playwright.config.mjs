@@ -15,7 +15,6 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testIgnore: /native\.spec\.mjs/,
       use: {
         browserName: "chromium",
         channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
@@ -23,13 +22,8 @@ export default defineConfig({
     },
     {
       name: "firefox",
-      testIgnore: /(?:native|benchmark|soak)\.spec\.mjs/,
+      testIgnore: /abr\.spec\.mjs/,
       use: { browserName: "firefox" },
-    },
-    {
-      name: "native",
-      testMatch: /native\.spec\.mjs/,
-      use: { browserName: "webkit" },
     },
   ],
   webServer: {

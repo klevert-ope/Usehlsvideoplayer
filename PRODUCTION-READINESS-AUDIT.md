@@ -1,8 +1,8 @@
 # Usehlsvideoplayer 2.0 production readiness audit
 
-This audit records an earlier candidate and its follow-up branch checks. Its digests and measurements do not identify the later upgrade. See the [upgrade verification report](docs/verification-report.md) for subsequent recovery, credential renewal, quality, and metrics work. Physical-device and extended endurance gates remain open.
+This audit records an earlier candidate and its follow-up branch checks. Its digests and measurements do not identify the later upgrade. See the [upgrade verification report](docs/verification-report.md) for subsequent recovery, credential renewal, quality, and metrics work. The verdict and gate descriptions below reflect the audit date. See the [current release checks](docs/qualification.md).
 
-**Verdict: FAIL for release.** The local candidate fixes the reproduced high-impact request-policy and lifecycle defects. The full release criteria still require 6-hour and 24-hour evidence, Safari on macOS and iOS, Chrome on physical Android hardware, and verification of the hosted release controls. A successful local browser suite cannot close those gates.
+**Verdict at the time of the audit: FAIL for release.** The local candidate fixes the reproduced high-impact request-policy and lifecycle defects. The full release criteria still require 6-hour and 24-hour evidence, Safari on macOS and iOS, Chrome on physical Android hardware, and verification of the hosted release controls. A successful local browser suite cannot close those gates.
 
 Baseline: `cd9ffc58a72abd320be9d3407b7ce46e7788a393`, verified against `origin/master` before that audit began. That commit merged TypeScript 7.0.2. Findings refer to that baseline unless stated otherwise. Initial remediation was tested in the local working tree; later hosted branch results are identified separately below. The historical local source digest is `ce167d8ead67fdc3c4f9b62365fd79621745342f1bc2e7a5fa221f3f9681f379` (SHA-256 over 57 sorted repository paths and their content hashes, excluding this report and generated output).
 

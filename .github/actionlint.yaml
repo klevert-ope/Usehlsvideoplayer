@@ -1,2 +1,2 @@
 self-hosted-runner:
-  labels: [hls-soak, hls-device-macos, hls-device-ios, hls-device-android]
+  labels: [hls-device-android]

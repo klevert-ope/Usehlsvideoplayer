@@ -13,7 +13,7 @@ The package root exports the hooks and playback types. The React hooks expose an
 
 ## Options
 
-Authentication renewal, recovery deadlines, `quality`, and the additional metrics below are [unreleased additions](../CHANGELOG.md#unreleased).
+Authentication renewal, recovery deadlines, `quality`, and the additional metrics below were added in [2.1.0](../CHANGELOG.md#210).
 
 | Option       | Default and effect                                                                                                                                                                                             |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

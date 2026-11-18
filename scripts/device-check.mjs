@@ -7,23 +7,19 @@ const {
   DEVICE_DRIVER,
   DEVICE_CAPABILITIES,
   DEVICE_FIXTURE_ORIGIN,
-  DEVICE_PLATFORM,
   GITHUB_SHA,
 } = process.env;
 assert.ok(
   DEVICE_DRIVER && DEVICE_CAPABILITIES && DEVICE_FIXTURE_ORIGIN && GITHUB_SHA,
   "Configure the physical device runner and fixture origin",
 );
-assert.ok(["macos", "ios", "android"].includes(DEVICE_PLATFORM));
 const capabilities = JSON.parse(DEVICE_CAPABILITIES);
-const isAndroid = DEVICE_PLATFORM === "android";
-assert.match(capabilities.browserName, isAndroid ? /^chrome$/i : /^safari$/i);
-if (DEVICE_PLATFORM !== "macos")
-  assert.ok(
-    capabilities["appium:udid"],
-    "Pin the physical device UDID on the runner",
-  );
-const engine = isAndroid ? "hls.js" : "native";
+assert.match(capabilities.browserName, /^chrome$/i);
+assert.match(capabilities.platformName, /^android$/i);
+assert.ok(
+  capabilities["appium:udid"],
+  "Pin the physical device UDID on the runner",
+);
 const server = spawn(
   process.execPath,
   [
@@ -77,7 +73,7 @@ try {
   const execute = (script) =>
     call("/execute/sync", "POST", { script, args: [] });
   await call("/url", "POST", {
-    url: `${DEVICE_FIXTURE_ORIGIN}/device.html?engine=${engine}`,
+    url: `${DEVICE_FIXTURE_ORIGIN}/device.html`,
   });
   await poll(() =>
     execute(
@@ -103,13 +99,8 @@ try {
       ? state
       : null;
   });
-  assert.equal(result.engine, engine);
-  assert.match(
-    result.agent,
-    { android: /Android/, ios: /iPhone|iPad|Mobile/, macos: /Macintosh/ }[
-      DEVICE_PLATFORM
-    ],
-  );
+  assert.equal(result.engine, "hls.js");
+  assert.match(result.agent, /Android/);
   await execute("window.deviceDestroy()");
   await poll(async () => {
     const state = await execute("return window.deviceSample()");
@@ -117,14 +108,14 @@ try {
   });
   mkdirSync("test-results/device", { recursive: true });
   writeFileSync(
-    `test-results/device/${DEVICE_PLATFORM}.json`,
+    "test-results/device/android.json",
     JSON.stringify(
       {
-        platform: DEVICE_PLATFORM,
+        platform: "android",
         revision: GITHUB_SHA,
         agent: result.agent,
         decoded: result.decoded,
-        engine,
+        engine: result.engine,
         teardown: "passed",
       },
       null,

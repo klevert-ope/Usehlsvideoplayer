@@ -77,6 +77,17 @@ test("VOD decodes through hls.js, changes rendition and selects alternate audio 
       ),
     )
     .toBe(false);
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.getByTestId("status")).toHaveText("idle");
+  await expect
+    .poll(() =>
+      video.evaluate((element) => [
+        element.hasAttribute("src") ||
+          Boolean(element.querySelector("source[src]")),
+        element.readyState,
+      ]),
+    )
+    .toEqual([false, 0]);
 });
 
 test("rolling live playlist exposes an advancing seekable window and seek-to-live", async ({

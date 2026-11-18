@@ -9,7 +9,6 @@
     const video = document.querySelector("#video");
     const button = document.querySelector("#play");
     const controller = createPlaybackController();
-    const engine = new URLSearchParams(location.search).get("engine");
     const revision = await fetch("/fixture-revision").then((response) =>
       response.text(),
     );
@@ -29,7 +28,6 @@
     });
     window.deviceDestroy = () => controller.destroy();
     controller.setSource(video, "/fixtures/low/index.m3u8", {
-      engine,
       recovery: false,
     });
     button.addEventListener("click", () => void controller.controls.play());

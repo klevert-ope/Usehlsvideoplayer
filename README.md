@@ -2,7 +2,7 @@
 
 Play HLS streams in an HTML video element with React hooks or a TypeScript controller. You supply the video element and choose between the browser's controls and your own.
 
-This README describes the current repository. The [Unreleased changelog](CHANGELOG.md#unreleased) identifies additions beyond 2.0.1, including authentication renewal, recovery deadlines, automatic quality preferences, and extended metrics. Use the docs from your installed version's tag when integrating a published package.
+Authentication renewal, recovery deadlines, automatic quality preferences, and extended metrics are available from version 2.1.0. See the [changelog](CHANGELOG.md#210) and use the documentation for your installed version.
 
 ## Play a stream in React
 
@@ -67,7 +67,7 @@ npm run fixtures
 npm run dev
 ```
 
-Open the local URL printed by Vite to play generated VOD, live, alternate audio, and captions. See [playback qualification](docs/qualification.md) for browser, soak, and release checks. The [engineering record](docs/modernization.md) tracks the package and playback changes.
+Open the local URL printed by Vite to play generated VOD, live, alternate audio, and captions. See [playback qualification](docs/qualification.md) for local browser checks and the release process. The [engineering record](docs/modernization.md) tracks the package and playback changes.
 
 The build uses the TypeScript 7 package aliased as `typescript-native`. TypeScript 6 supplies the compiler API used by ESLint. Run the npm scripts to select the intended compiler.
 

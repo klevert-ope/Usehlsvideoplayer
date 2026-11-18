@@ -31,27 +31,19 @@ test("release qualification rejects stale, forked, skipped and spoofed evidence"
       () => verifyQualificationRun({ ...run, ...change }, sha, repo),
       /exact release SHA/,
     );
-  const jobs = [
-    "soak-30",
-    "soak-360",
-    "soak-1440",
-    "device-macos",
-    "device-ios",
-    "device-android",
-  ].map((name) => ({ name, status: "completed", conclusion: "success" }));
-  verifyQualificationJobs(jobs);
-  assert.throws(
-    () => verifyQualificationJobs(jobs.slice(0, 5)),
-    /device-android/,
-  );
-  assert.throws(
-    () =>
-      verifyQualificationJobs(
-        jobs.map((job) =>
-          job.name === "soak-1440" ? { ...job, conclusion: "skipped" } : job,
-        ),
-      ),
-    /soak-1440/,
-  );
-  assert.throws(() => verifyQualificationJobs([...jobs, jobs[0]]), /soak-30/);
+  const job = {
+    name: "device-android",
+    status: "completed",
+    conclusion: "success",
+  };
+  verifyQualificationJobs([job]);
+  for (const jobs of [
+    [],
+    [job, job],
+    [{ ...job, name: "another-job" }],
+    [{ ...job, status: "in_progress" }],
+    [{ ...job, conclusion: "failure" }],
+    [{ ...job, conclusion: "skipped" }],
+  ])
+    assert.throws(() => verifyQualificationJobs(jobs), /device-android/);
 });

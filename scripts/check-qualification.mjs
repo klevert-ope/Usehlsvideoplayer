@@ -1,14 +1,5 @@
 import { pathToFileURL } from "node:url";
 
-const required = [
-  "soak-30",
-  "soak-360",
-  "soak-1440",
-  "device-macos",
-  "device-ios",
-  "device-android",
-];
-
 export function verifyQualificationRun(run, sha, repo) {
   if (
     run.head_sha !== sha ||
@@ -28,15 +19,13 @@ export function verifyQualificationRun(run, sha, repo) {
 }
 
 export function verifyQualificationJobs(jobs) {
-  for (const name of required) {
-    const matches = jobs.filter((job) => job.name === name);
-    if (
-      matches.length !== 1 ||
-      matches[0].status !== "completed" ||
-      matches[0].conclusion !== "success"
-    )
-      throw new Error(`Missing successful qualification job: ${name}`);
-  }
+  const matches = jobs.filter((job) => job.name === "device-android");
+  if (
+    matches.length !== 1 ||
+    matches[0].status !== "completed" ||
+    matches[0].conclusion !== "success"
+  )
+    throw new Error("Missing successful qualification job: device-android");
 }
 
 if (

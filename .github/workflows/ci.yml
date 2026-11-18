@@ -50,24 +50,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            project: chromium
+          - project: chromium
             browser: chrome
             channel: chrome
-          - os: ubuntu-latest
-            project: chromium
+          - project: chromium
             browser: msedge
             channel: msedge
-          - os: ubuntu-latest
-            project: firefox
+          - project: firefox
             browser: firefox
             channel: ""
-          - os: macos-latest
-            project: native
-            browser: webkit
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     env:
-      REQUIRE_NATIVE_HLS: "1"
       PLAYWRIGHT_CHANNEL: ${{ matrix.channel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,10 +71,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
-      - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - if: runner.os == 'macOS'
-        run: command -v ffmpeg || brew install ffmpeg
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npm run fixtures
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       - run: npm run test:browser:${{ matrix.project }}

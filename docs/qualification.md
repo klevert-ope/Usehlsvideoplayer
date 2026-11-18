@@ -1,47 +1,24 @@
 # Playback qualification and release
 
-Install the lockfile with `npm ci --ignore-scripts`. Use a current Node 24 or 26 patch release for development; CI also checks a current Node 22 release. TypeScript 7 compiles both package formats and the type consumers. The separate TypeScript 6 installation supplies the JavaScript compiler API currently required by `typescript-eslint`; remove it and its Dependabot exception when that integration supports TypeScript 7.
+Install the lockfile with `npm ci --ignore-scripts`. CI runs the package checks on Node 22, 24 and 26, including React 18.2 and the locked React version. TypeScript 7 builds the library. TypeScript 6 supplies the compiler API used by ESLint.
 
-| Gate    | Run                                                                                                               | Evidence                                                                                                                                                                                                                                                                                                               |
-| ------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fast    | `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run check:package`, `npm run audit` | Strict types, generated lifecycle traces, React 18/19, tarball consumers, production and development dependency checks. `CHECK_NEXT=1` includes the Next.js production build, prerender and request-time SSR.                                                                                                          |
-| Browser | `npm run fixtures`, `npx playwright install`, `npm run test:browser`                                              | MPEG-TS and CMAF decode, live and DVR, protected requests and faults. `PLAYWRIGHT_CHANNEL=chrome` or `msedge` selects an installed desktop browser. `PUBLIC_HLS=1` enables an external Mux VOD smoke test; availability depends on the remote origin. The native test is a required capability on the macOS CI runner. |
-| Soak    | `npm run fixtures`, `npx playwright install chromium`, then `SOAK_MINUTES=30 npm run test:soak`                   | Set `360` or `1440` for sustained sessions. The 30-minute profile repeatedly creates, plays and destroys controllers. A one-minute profile checks the harness. NDJSON is written incrementally to `test-results/soak`. In PowerShell use `$env:SOAK_MINUTES='30'; npm run test:soak`.                                  |
+## Checks for each change
 
-The soak uses a local H.264 CMAF stream with 500 ms parts and discontinuities. It samples post-GC JavaScript heap, DOM nodes and listeners, detached roots when exposed by CDP, pending page timers and requests, MediaSource blob ownership, frame counters, buffer and playback metrics. Memory thresholds flag changes in the median after warm-up; they are starting regression budgets, not evidence of an absence of leaks. Browser workers, native decoder memory, physical device power and production networks are outside this measurement. The fixture uses a finite 30-second back buffer. If you run encrypted live with rotating signed key URLs, also measure that workload separately: hls.js retains key records for unique URLs until teardown.
+- Run `npm run typecheck`, `npm run lint`, `npm run format:check` and `npm test`. The tests exercise source ownership, native adapter attachment and cleanup, recovery deadlines, stale callbacks, React Strict Mode and selective subscriptions.
+- Run `npm run check:package` to install and exercise the packed library in isolated consumers. Set `CHECK_NEXT=1` to include Next.js prerendering and request-time SSR. CI also audits the lockfile and checks registry signatures.
+- With FFmpeg on PATH, run `npm run fixtures`, `npx playwright install chromium firefox` and `npm run test:browser`. CI runs Chrome, Edge and Firefox. Set `PLAYWRIGHT_CHANNEL=chrome` or `msedge` to use an installed Chromium browser locally.
+- The browser suite uses local media for rendition changes, alternate tracks, recovery, protected requests and LL-HLS blocking reloads. The lifecycle regression reuses one video element across live CMAF and AES-128 sessions. It waits for presented frames, observes distinct key requests and checks MediaSource URL revocation, media reset, interval cleanup and completion or cancellation of fixture requests after each destruction.
 
-## Upgrade workloads
+Safari and iOS decoding, multi-hour memory growth and native decoder resource use are outside this suite. See the [compatibility guide](compatibility.md).
 
-Set `PUBLIC_LL_HLS` to a public, non-secret manifest URL to enable the optional real-origin LL-HLS smoke test. It requires actual presented frames, advertised partial segments, successful partial-media responses and successful blocking reloads. Keep private signed URLs out of CI inputs, traces and report artefacts. External-origin availability is independent of fixture correctness.
+Set `PUBLIC_LL_HLS` to a public LL-HLS manifest to check an origin's partial segments and blocking reloads. Keep signed or private URLs out of this input, traces and artefacts.
 
-Browser regressions exercise async headers, renewal, stale-provider cancellation before dispatch, quality preferences/manual override and actual buffer starvation. `SOAK_ENCRYPTED=1` switches the existing soak to synthetic AES-128 HLS with a unique signed-looking key URI per segment. The key is a public fixture value. Run this separately from CMAF LL-HLS and retain both artefacts. A one-minute smoke establishes decoding and teardown, not long-running key retention.
+## Physical Android runner
 
-`PLAYWRIGHT_CHANNEL=chrome` selects installed Chrome for browser or soak checks. Leave it unset for Playwright Chromium after installing the runtime matching the lockfile. Compare benchmarks only with matched browsers and host conditions. Windows WebKit skips are NOT_RUN for Safari compatibility.
-
-The [local upgrade report](verification-report.md) identifies the runtime fingerprint used for its browser and endurance evidence. Later commits and package metadata changes do not turn those results into exact-commit release evidence. Qualification still requires the protected workflow and all existing device and endurance jobs. The scheduled workflow runs the standard CMAF profile; encrypted mode is a separate workload and is not included automatically.
-
-To run an encrypted smoke in PowerShell:
-
-```powershell
-$env:SOAK_MINUTES = '1'
-$env:SOAK_ENCRYPTED = '1'
-$env:SOAK_OUTPUT = 'test-results/soak-encrypted'
-try {
-	npm run test:soak
-} finally {
-	Remove-Item Env:SOAK_MINUTES, Env:SOAK_ENCRYPTED, Env:SOAK_OUTPUT
-}
-```
-
-Use a fresh shell for these commands if you already have soak variables configured. Set `SOAK_MINUTES` to `30` for repeated teardown or to `360` or `1440` for sustained sessions. Keep the standard and encrypted outputs in separate directories.
-
-## Runner setup
-
-- Register a dedicated `hls-soak` runner with FFmpeg, Playwright's Chromium system dependencies and enough capacity for a 24-hour job. Allow the `qualification.yml` workflow on protected `master` through the runner group. A GitHub-hosted runner handles the 30-minute profile.
-- Register separate `hls-device-macos`, `hls-device-ios` and `hls-device-android` runners. Use desktop Safari through Safari WebDriver and physically attached phones/tablets through Appium XCUITest or UiAutomator2. Do not register emulators under those labels. Install FFmpeg on each runner. Set `DEVICE_DRIVER` to the W3C endpoint, `DEVICE_CAPABILITIES` to its JSON capability object (`browserName`, `platformName` and, for Appium, automation name and physical UDID), and `DEVICE_FIXTURE_ORIGIN` to the runner's LAN address on port 4175 as reachable by that device. Keep the test server on a private network. Retain the device model, OS, browser version and capabilities alongside the run; the automated probe checks decoded frames, engine choice, exact source revision and teardown.
+Register the `hls-device-android` runner with a physical Android device, Chrome, FFmpeg and Appium UiAutomator2. Restrict its runner group to the qualification workflow on protected `master`. Set `DEVICE_DRIVER` to the WebDriver endpoint, `DEVICE_CAPABILITIES` to the Android Chrome capability object with its physical UDID, and `DEVICE_FIXTURE_ORIGIN` to the runner's private LAN origin on port 4175 as reachable by the device. The probe checks the fixture revision, presented frames, engine and teardown.
 
 ## Release approval
 
-1. Configure GitHub tag protection and a protected `npm-release` environment with required reviewers and self-approval disabled. In [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/), bind `klevert-ope/Usehlsvideoplayer`, `publish.yml`, and the exact `npm-release` environment. Do not leave an older environment-free publisher or a long-lived npm token able to bypass that gate.
-2. Run **Extended playback qualification** on the candidate commit on protected `master`. Inspect all three soak and three physical-device artifacts. The release workflow requires the successful run and all six successful jobs for the exact SHA. Missing, skipped, stale or forked evidence blocks publishing.
-3. After maintainer approval, create the matching release tag and explicitly dispatch **Publish to npm** against that tag with the qualification run ID, for example `gh workflow run publish.yml --ref vX.Y.Z -f qualification_run=RUN_ID`. The fast and browser gates build the candidate tarball. Review the protected deployment before granting the publish job its OIDC authority.
+1. Configure tag protection and the protected `npm-release` environment with required reviewers and self-approval disabled. Remove any older publisher or long-lived token that could bypass approval. Bind the repository, `publish.yml` and that environment in [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/).
+2. Run **Android playback qualification** on the candidate commit on protected `master` and inspect the device artefact. Publishing requires a successful Android job from that repository, workflow and exact commit.
+3. After approval, create the tag matching the stable package version and dispatch **Publish to npm** against it with `gh workflow run publish.yml --ref vX.Y.Z -f qualification_run=RUN_ID`. Package and desktop browser checks run again on that tag before the candidate tarball is built. Review the protected deployment before approving publication.

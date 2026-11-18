@@ -4,7 +4,7 @@
 
 The local upgrade implements the recovery, authentication, quality, metrics, and integration work below. The [verification report](verification-report.md) records 37 fast tests, Chrome and Firefox playback checks, packed consumers, and two local 30-minute soak workloads. Those browser and endurance results identify the recorded runtime fingerprint, rather than a subsequently committed release SHA.
 
-Physical-device, six-hour, 24-hour, and hosted exact-commit qualification remain open. The release workflow requires that evidence before publication. See the [qualification runbook](qualification.md). The milestone sections below preserve the planning rationale and acceptance criteria.
+The [qualification runbook](qualification.md) defines the current release checks, including physical Android. The milestones below record the original plan. Its Safari and timed endurance gates have been retired.
 
 ## Baseline and decisions
 

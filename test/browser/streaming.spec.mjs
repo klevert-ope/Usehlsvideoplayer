@@ -34,6 +34,96 @@ async function start(page, source, options = {}) {
   );
 }
 
+test("successive live sessions present frames and release media, timers and requests", async ({
+  page,
+}) => {
+  const pending = new Set();
+  const keys = new Set();
+  page.on("request", (request) => {
+    if (/^\/(live|fixtures|encrypted)\//.test(new URL(request.url()).pathname))
+      pending.add(request);
+  });
+  page.on("requestfinished", (request) => pending.delete(request));
+  page.on("requestfailed", (request) => pending.delete(request));
+  page.on("response", (response) => {
+    if (response.ok() && new URL(response.url()).pathname === "/encrypted/key")
+      keys.add(response.url());
+  });
+  await page.goto("/blank.html");
+  await page.evaluate(async () => {
+    const { createPlaybackController } = await import("/src/core.ts");
+    const video = document.createElement("video");
+    video.muted = true;
+    document.body.append(video);
+    const intervals = new Set();
+    const revoked = new Set();
+    const schedule = window.setInterval.bind(window);
+    const clear = window.clearInterval.bind(window);
+    const revoke = URL.revokeObjectURL.bind(URL);
+    window.setInterval = (...args) => {
+      const id = schedule(...args);
+      intervals.add(id);
+      return id;
+    };
+    window.clearInterval = (id) => {
+      intervals.delete(id);
+      clear(id);
+    };
+    URL.revokeObjectURL = (url) => {
+      revoked.add(url);
+      revoke(url);
+    };
+    window.lifecycle = { createPlaybackController, video, intervals, revoked };
+  });
+  for (const source of [
+    "/live/ll.m3u8",
+    "/encrypted/stream.m3u8",
+    "/live/ll.m3u8",
+  ]) {
+    await page.evaluate((source) => {
+      const session = window.lifecycle;
+      const { video } = session;
+      session.controller = session.createPlaybackController();
+      session.controller.setSource(video, source, {
+        autoPlay: true,
+        metrics: true,
+      });
+      return new Promise((resolve) => {
+        let firstTime;
+        video.requestVideoFrameCallback(function frame(_now, { mediaTime }) {
+          firstTime ??= mediaTime;
+          if (mediaTime - firstTime >= 1.25) resolve();
+          else video.requestVideoFrameCallback(frame);
+        });
+      });
+    }, source);
+    if (source.startsWith("/encrypted/")) {
+      await expect.poll(() => keys.size).toBeGreaterThanOrEqual(2);
+    }
+    const blob = await page.evaluate(() => {
+      const { controller, video } = window.lifecycle;
+      const attached = video.currentSrc;
+      controller.destroy();
+      return attached;
+    });
+    expect(blob).toMatch(/^blob:/);
+    await expect
+      .poll(() =>
+        page.evaluate((blob) => {
+          const { video, intervals, revoked } = window.lifecycle;
+          return [
+            video.hasAttribute("src"),
+            video.readyState,
+            revoked.has(blob),
+            intervals.size,
+          ];
+        }, blob),
+      )
+      .toEqual([false, 0, true, 0]);
+    await expect.poll(() => pending.size).toBe(0);
+  }
+});
+
 test("decodes fragmented MP4 after requesting an init and a media segment", async ({
   page,
 }) => {
@@ -358,17 +448,6 @@ test("protected redirects, cross-origin segments and keys never reach the destin
     await Promise.all(servers.map((close) => close()));
   }
 });
-
-if (process.env.PUBLIC_HLS === "1") {
-  test("decodes the public Mux HLS VOD sample", async ({ page }) => {
-    await start(page, "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8");
-    await expect
-      .poll(() => page.evaluate(() => window.fixture.sample.frames), {
-        timeout: 20_000,
-      })
-      .toBeGreaterThan(10);
-  });
-}
 
 if (process.env.PUBLIC_LL_HLS) {
   test("external LL-HLS advertises and decodes parts with successful blocking reloads", async ({

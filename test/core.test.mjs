@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { test } from "node:test";
+import { runInNewContext } from "node:vm";
 import fc from "fast-check";
 import { createPlaybackController, selectEngine } from "usehlsvideoplayer/core";
 import { classifyHlsError } from "../dist/esm/errors.js";
@@ -376,6 +377,23 @@ test("recovery can resume playback and a later scheduled recovery is cancelled b
   t.mock.timers.tick(20);
   assert.equal(sessions.length, 3);
   assert.equal(controller.getState().recovery, null);
+  controller.destroy();
+});
+
+test("play rejections from another realm preserve browser error semantics", async () => {
+  const { video, controller } = rig();
+  controller.setSource(video, "/vod");
+  for (const [name, expectedCode] of [
+    ["AbortError", null],
+    ["NotAllowedError", "playback-blocked"],
+  ]) {
+    const cause = runInNewContext("Object.assign(new Error(), { name })", {
+      name,
+    });
+    video.play = () => Promise.reject(cause);
+    assert.equal(await controller.controls.play(), false);
+    assert.equal(controller.getState().error?.code ?? null, expectedCode);
+  }
   controller.destroy();
 });
 

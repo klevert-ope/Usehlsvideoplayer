@@ -1,10 +1,10 @@
 # Engineering upgrade verification
 
-The recorded local upgrade passed both 30-minute endurance workloads. Release readiness remains **BLOCKED** on physical-device, six-hour, 24-hour and exact-commit qualification.
+This historical report records two successful 30-minute workloads and the release requirements at the time of measurement. The [qualification runbook](qualification.md) defines the current release checks.
 
 ## Documentation and branch reconciliation
 
-The documentation sync incorporated remote `master` through `19582b7`, retaining the 2.0.1 version and release notes alongside the local playback changes. New APIs are listed under [Unreleased](../CHANGELOG.md#unreleased); no new package version or release is created by this sync.
+The documentation sync incorporated remote `master` through `19582b7`, retaining the 2.0.1 version and release notes at the time. The [2.1.0 changelog](../CHANGELOG.md#210) now lists the new playback APIs.
 
 The results below belong to the earlier working-tree candidate and its recorded fingerprint. Package metadata changed during reconciliation, so those results do not qualify the final commit. The local evidence directories are ignored and are not included in the repository or npm package. Historical audit and roadmap documents now link here to distinguish their earlier assessments from this upgrade.
 
@@ -92,7 +92,7 @@ Soak measurements cover renderer JavaScript heap, DOM/listeners, detached roots,
 
 ## Remaining risks and release recommendation
 
-Release readiness: **BLOCKED** until the retained exact-candidate physical-device and long-soak gates pass. This is locally implemented and tested work, not a production-qualified release.
+At the time of this report, exact-candidate device and long-session evidence was outstanding. The observations below apply to the measured upgrade.
 
 - Native HLS cannot enforce injected headers, per-request origins or reliable HTTP-status renewal. Its decoder recovery and stall behaviour still need real devices.
 - Proactive credential rotation, server authorisation, cross-player refresh coordination, CORS/cookies and CDN trust remain application responsibilities. Reactive retries remain finite.

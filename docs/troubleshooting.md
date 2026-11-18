@@ -22,4 +22,4 @@ Start with `state.status`, `state.engine`, and `state.error?.code`. For hls.js, 
 
 See [browser compatibility](compatibility.md) for engine capabilities and the [usage guide](usage.md#send-credentials-with-hls-requests) for the protected request setup.
 
-The deadline, renewal, and automatic quality options are [unreleased additions](../CHANGELOG.md#unreleased). For metrics, `firstFrameMs` can precede `startupMs` when the browser presents a paused preview. `recoveryMs` is separate from `rebufferMs` and its ratio. See the [metrics reference](api.md#metrics).
+The deadline, renewal, and automatic quality options require [2.1.0 or later](../CHANGELOG.md#210). For metrics, `firstFrameMs` can precede `startupMs` when the browser presents a paused preview. `recoveryMs` is separate from `rebufferMs` and its ratio. See the [metrics reference](api.md#metrics).

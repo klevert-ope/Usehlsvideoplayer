@@ -1,6 +1,6 @@
 # Playback qualification and release
 
-Install the lockfile with `npm ci --ignore-scripts`. CI runs the package checks on Node 22, 24 and 26, including React 18.2 and the locked React version. TypeScript 7 builds the library. TypeScript 6 supplies the compiler API used by ESLint.
+Install the lockfile with `npm ci --ignore-scripts`. CI runs on pushes to `master`, on pull requests and on manual dispatch. It checks package compatibility on Node 22, 24 and 26, including React 18.2 and the locked React version. TypeScript 7 builds the library. TypeScript 6 supplies the compiler API used by ESLint.
 
 ## Checks for each change
 
@@ -8,6 +8,8 @@ Install the lockfile with `npm ci --ignore-scripts`. CI runs the package checks 
 - Run `npm run check:package` to install and exercise the packed library in isolated consumers. Set `CHECK_NEXT=1` to include Next.js prerendering and request-time SSR. CI also audits the lockfile and checks registry signatures.
 - With FFmpeg on PATH, run `npm run fixtures`, `npx playwright install chromium firefox` and `npm run test:browser`. CI runs Chrome, Edge and Firefox. Set `PLAYWRIGHT_CHANNEL=chrome` or `msedge` to use an installed Chromium browser locally.
 - The browser suite uses local media for rendition changes, alternate tracks, recovery, protected requests and LL-HLS blocking reloads. The lifecycle regression reuses one video element across live CMAF and AES-128 sessions. It waits for presented frames, observes distinct key requests and checks MediaSource URL revocation, media reset, interval cleanup and completion or cancellation of fixture requests after each destruction.
+
+The CI audit blocks moderate or higher findings and checks registry signatures on Node 24. `npm run audit:ci` reports the temporary exception for `picomatch` 4.0.7 and accepts only the named advisory on development-only lockfile entries. The runtime audit has no exceptions. Remove the exception when the lockfile can use a patched version. [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)
 
 Safari and iOS decoding, multi-hour memory growth and native decoder resource use are outside this suite. See the [compatibility guide](compatibility.md).
 

@@ -18,7 +18,8 @@
     "check:package": "node scripts/check-package.mjs",
     "dev": "vite --host 127.0.0.1",
     "fixtures": "node scripts/fixtures.mjs",
-    "audit": "npm audit --audit-level=moderate"
+    "audit": "npm audit --audit-level=moderate",
+    "audit:ci": "node scripts/check-audit.mjs"
   },
   "repository": {
     "type": "git",

@@ -42,7 +42,17 @@ try {
   mkdirSync(cleanInstall);
   for (const file of ["package.json", "package-lock.json"])
     copyFileSync(file, join(cleanInstall, file));
-  node([npm, "ci", "--ignore-scripts", "--no-fund"], cleanInstall);
+  node(
+    [
+      npm,
+      "ci",
+      "--ignore-scripts",
+      "--prefer-offline",
+      "--no-audit",
+      "--no-fund",
+    ],
+    cleanInstall,
+  );
   console.log("Isolated lockfile installation passed");
   const packed = JSON.parse(
     node([npm, "pack", "--json", "--pack-destination", temp], process.cwd()),

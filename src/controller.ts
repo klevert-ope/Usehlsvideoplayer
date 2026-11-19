@@ -6,6 +6,7 @@ import {
 import { abortable } from "./async.js";
 import { classifyMediaError, failure, sourceUrl } from "./errors.js";
 import { createMetrics } from "./metrics.js";
+import { snapshotPlayerOptions } from "./options.js";
 import { canTransition, initialState } from "./state.js";
 import type {
   MediaRange,
@@ -48,6 +49,7 @@ interface Session {
   suspended: boolean;
   recovering: boolean;
   recoveryTime: number;
+  recoverySeekPending: boolean;
   watchdog?: ReturnType<typeof setTimeout>;
   watchTime: number;
 }
@@ -215,7 +217,9 @@ export function createPlaybackController(
   }
 
   function release(owner: Source) {
-    owner.authentication?.abort();
+    // Abort handlers can select a source while this owner still claims the video.
+    const authentication = owner.authentication;
+    if (authentication) inAdapter(() => authentication.abort());
     owner.metrics?.stop();
     clearTimeout(owner.timer);
     clearInterval(owner.metricsTimer);
@@ -243,6 +247,14 @@ export function createPlaybackController(
     );
   }
 
+  function loadingDeferred(owner: Source, session: Session): boolean {
+    return (
+      session.engine?.kind === "hls.js" &&
+      owner.options.hlsConfig?.autoStartLoad === false &&
+      !owner.loadRequested
+    );
+  }
+
   function sample(
     owner: Source,
     session: Session,
@@ -257,12 +269,15 @@ export function createPlaybackController(
     owner.metrics?.bandwidth(features?.bandwidthEstimate ?? null);
     let recovered: RecoveryState | undefined;
     if (session.recovering) {
-      if (
+      session.recoverySeekPending ||= video.seeking;
+      const deferredManifest =
+        loadingDeferred(owner, session) && features?.manifestReady === true;
+      const mediaRecovered =
         session.ready &&
-        !video.seeking &&
+        !session.recoverySeekPending &&
         (!owner.wantsPlay ||
-          (!video.paused && video.currentTime > session.recoveryTime + 0.01))
-      ) {
+          (!video.paused && video.currentTime > session.recoveryTime + 0.01));
+      if (deferredManifest || mediaRecovered) {
         session.recovering = false;
         owner.forceRecreate = false;
         clearTimeout(owner.timer);
@@ -272,7 +287,11 @@ export function createPlaybackController(
           state.recovery?.limit ?? 0,
         );
         patch = { ...patch, error: null, recovery: recovered };
-        status = video.paused ? "ready" : "playing";
+        status = deferredManifest
+          ? "loading"
+          : video.paused
+            ? "ready"
+            : "playing";
       } else status = "recovering";
     }
     const seekable = ranges(video.seekable, state.seekable);
@@ -340,10 +359,7 @@ export function createPlaybackController(
           video.seeking ||
           video.ended ||
           video.ownerDocument.hidden)) ||
-      (startup &&
-        session.engine?.kind === "hls.js" &&
-        owner.options.hlsConfig?.autoStartLoad === false &&
-        !owner.loadRequested);
+      (startup && loadingDeferred(owner, session));
     if (reset || suspended || session.watchTime !== video.currentTime) {
       clearTimeout(session.watchdog);
       session.watchdog = undefined;
@@ -476,6 +492,7 @@ export function createPlaybackController(
       ? "refresh-authentication"
       : !owner.forceRecreate &&
           session?.engine?.recover &&
+          !loadingDeferred(owner, session) &&
           ["network", "segment", "manifest", "decode"].includes(error.code)
         ? error.code === "decode"
           ? "recover-media"
@@ -535,6 +552,7 @@ export function createPlaybackController(
           session.suspended = false;
           session.recovering = true;
           session.recoveryTime = owner.video.currentTime;
+          session.recoverySeekPending = owner.video.seeking;
           session.ready = false;
           attemptDeadline(owner, session);
           let accepted = false;
@@ -552,6 +570,7 @@ export function createPlaybackController(
             if (action === "restart-loading" && owner.video.readyState >= 3) {
               session.ready = true;
               owner.resumeAt = null;
+              sample(owner, session);
             }
             return;
           }
@@ -621,6 +640,7 @@ export function createPlaybackController(
       suspended: false,
       recovering,
       recoveryTime: video.currentTime,
+      recoverySeekPending: false,
       watchTime: video.currentTime,
     };
     owner.session = session;
@@ -723,10 +743,17 @@ export function createPlaybackController(
           if (video.readyState < 3) handlers.waiting?.();
         },
         seeking: () => {
+          if (active(owner, session) && session.recovering)
+            session.recoverySeekPending = true;
           if (session.ready && video.seeking) sample(owner, session, "seeking");
         },
         seeked: () => {
-          if (session.ready && !video.seeking)
+          if (!active(owner, session) || video.seeking) return;
+          if (session.recovering) {
+            session.recoverySeekPending = false;
+            session.recoveryTime = video.currentTime;
+          }
+          if (session.ready)
             sample(
               owner,
               session,
@@ -839,19 +866,7 @@ export function createPlaybackController(
     const owner: Source = {
       video,
       url,
-      options: {
-        ...options,
-        hlsConfig: options.hlsConfig && { ...options.hlsConfig },
-        recovery: options.recovery && { ...options.recovery },
-        quality: options.quality && { ...options.quality },
-        request: options.request && {
-          ...options.request,
-          allowedOrigins: [...options.request.allowedOrigins],
-          refreshStatusCodes: options.request.refreshStatusCodes && [
-            ...options.request.refreshStatusCodes,
-          ],
-        },
-      },
+      options: snapshotPlayerOptions(options),
       attempt: 0,
       wantsPlay: options.autoPlay ?? false,
       loadRequested: false,
@@ -1028,8 +1043,14 @@ export function createPlaybackController(
       startLoading: () =>
         command((_video, engine, owner) => {
           if (!engine.startLoading) return false;
-          engine.startLoading();
+          const alreadyRequested = owner.loadRequested;
           owner.loadRequested = true;
+          try {
+            engine.startLoading();
+          } catch (cause) {
+            owner.loadRequested = alreadyRequested;
+            throw cause;
+          }
           return true;
         }),
       retry: () => {

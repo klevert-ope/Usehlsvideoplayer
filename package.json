@@ -1,6 +1,6 @@
 {
   "name": "usehlsvideoplayer",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Headless HLS playback controller and React hooks",
   "type": "module",
   "scripts": {

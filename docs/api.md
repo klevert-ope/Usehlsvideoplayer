@@ -118,6 +118,8 @@ State samples from `timeupdate` publish at most four times per second. Media eve
 
 `RecoveryState.action` optionally identifies `restart-loading`, `recover-media`, `recreate` or `refresh-authentication`. Event discriminants are unchanged. Optional custom-adapter `recover(action)` accepts the first two operations and returns whether it accepted the operation; absence, rejection or an exception falls back to reconstruction. Acceptance alone does not establish successful recovery.
 
+From [2.1.1](../CHANGELOG.md#211), a successfully parsed manifest completes the attempt when hls.js recovery runs with `autoStartLoad: false` and loading is still deferred. The state returns to `loading` with recovery phase `recovered` and waits for `startLoading()`. If loading was already requested, recovery continues until paused media is ready or requested playback advances. A seek sets a new progress baseline. Custom hls.js adapters can report manifest parsing with `EngineFeatures.manifestReady`.
+
 ## Authentication callbacks
 
 `request.headers(url, { signal })` may return headers or `undefined`, synchronously or asynchronously. Existing synchronous one-argument callbacks remain valid. The URL may contain secrets: it is an application callback input, not a diagnostic. Origins are validated before invocation; request/session teardown aborts pending providers. Providers should honour the signal; late results are ignored regardless.

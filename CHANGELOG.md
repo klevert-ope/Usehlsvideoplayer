@@ -1,8 +1,14 @@
 # Changelog
 
-## Unreleased
+## 2.1.1
 
-- Moved npm publication to the local maintainer procedure. GitHub Actions still validates and packages release candidates.
+- Fixed source replacement and teardown when a credential-renewal abort handler changes the source.
+- Fixed deferred HLS recovery so the player can retry the manifest and then wait for `startLoading()`. A stalled manifest retry still uses the recovery deadline.
+- Fixed recovery for paused streams with buffered data and for playback that resumes after a forward or backward seek.
+- Fixed React session updates when a top-level value changes in a reused `hlsConfig` object.
+- Moved npm publication to the [local maintainer procedure](docs/qualification.md#publish-from-a-maintainers-machine). GitHub Actions validates and packages release candidates.
+
+See the [recovery API](docs/api.md#optional-reliability-controls) and the [local verification results](docs/verification-report.md#version-211-checks).
 
 ## 2.1.0
 

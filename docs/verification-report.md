@@ -1,6 +1,10 @@
 # Engineering upgrade verification
 
-This report records the 2.1.0 release checks and two earlier 30-minute workloads. The [qualification runbook](qualification.md) defines the current release checks.
+This report records local checks for 2.1.1, the 2.1.0 release checks and two earlier 30-minute workloads. The [qualification runbook](qualification.md) defines the current release checks.
+
+## Version 2.1.1 checks
+
+The playback patch passed 47 Node tests and 56 local Playwright tests on Windows across Chrome, Edge and Firefox. The deferred-loading regression confirmed that the player recovered the manifest, waited beyond the recovery deadline before requesting any media segments, and presented frames after an explicit start. Packed consumers passed on React 18.2 and React 19.3, with Next.js static prerendering and production SSR. Physical Android qualification was not run.
 
 ## Version 2.1.0 checks
 

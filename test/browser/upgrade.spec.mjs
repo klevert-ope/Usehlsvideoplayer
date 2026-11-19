@@ -210,6 +210,82 @@ test("source replacement aborts an unresolved header provider before any network
   ).toBeNull();
 });
 
+test("a deferred stream recovers its manifest and waits for explicit media loading", async ({
+  page,
+}) => {
+  let manifests = 0;
+  let mediaSegments = 0;
+  await page.route("**/fixtures/master.m3u8", (route) => {
+    if (++manifests === 1)
+      return route.fulfill({ status: 503, body: "Temporary failure" });
+    return route.continue();
+  });
+  page.on("request", (request) => {
+    if (
+      /\/fixtures\/(low|high)\/seg\d+\.ts$/.test(
+        new URL(request.url()).pathname,
+      )
+    )
+      mediaSegments++;
+  });
+
+  await initialise(page);
+  const attemptTimeoutMs = 2000;
+  await page.evaluate((attemptTimeoutMs) => {
+    const { controller, video } = window.upgrade;
+    controller.setSource(video, "/fixtures/master.m3u8", {
+      hlsConfig: {
+        autoStartLoad: false,
+        manifestLoadPolicy: {
+          default: {
+            maxTimeToFirstByteMs: 1000,
+            maxLoadTimeMs: 1500,
+            timeoutRetry: null,
+            errorRetry: null,
+          },
+        },
+      },
+      recovery: { maxAttempts: 1, baseDelayMs: 0, attemptTimeoutMs },
+    });
+  }, attemptTimeoutMs);
+  const readState = () =>
+    page.evaluate(() => {
+      const { status, recovery, quality } =
+        window.upgrade.controller.getState();
+      return { status, phase: recovery?.phase, levels: quality.levels.length };
+    });
+  await expect.poll(readState).toEqual({
+    status: "loading",
+    phase: "recovered",
+    levels: 2,
+  });
+  await page.evaluate(
+    (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
+    attemptTimeoutMs + 100,
+  );
+  expect(await readState()).toMatchObject({
+    status: "loading",
+    phase: "recovered",
+  });
+  expect(manifests).toBe(2);
+  expect(mediaSegments).toBe(0);
+
+  expect(
+    await page.evaluate(() =>
+      window.upgrade.controller.controls.startLoading(),
+    ),
+  ).toBe(true);
+  await expect.poll(async () => (await readState()).status).toBe("ready");
+  expect(
+    await page.evaluate(() => window.upgrade.controller.controls.play()),
+  ).toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => window.upgrade.frames))
+    .toBeGreaterThan(2);
+  expect(mediaSegments).toBeGreaterThan(0);
+  await page.evaluate(() => window.upgrade.controller.destroy());
+});
+
 test("buffer starvation reaches the opt-in deadline without an initialization loop", async ({
   page,
 }) => {

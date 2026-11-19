@@ -13,6 +13,8 @@ import type {
 } from "./types.js";
 
 export interface EngineFeatures {
+  /** The manifest is parsed, even when media loading is explicitly deferred. */
+  readonly manifestReady?: boolean;
   readonly bandwidthEstimate?: number | null;
   readonly quality?: QualityState;
   readonly audio?: TrackState;
@@ -160,6 +162,7 @@ function hlsEngine({
         debug: false,
       });
   let active = true;
+  let manifestReady = false;
   let live: EngineFeatures["live"];
   let metadata: EngineFeatures = {};
 
@@ -187,6 +190,7 @@ function hlsEngine({
       selected: index < 0 ? null : index,
     });
     metadata = {
+      manifestReady,
       bandwidthEstimate: Number.isFinite(hls.bandwidthEstimate)
         ? hls.bandwidthEstimate
         : null,
@@ -228,6 +232,7 @@ function hlsEngine({
       }
       const events = Hls.Events;
       hls.on(events.MANIFEST_PARSED, () => {
+        manifestReady = true;
         applyQuality(true);
         if (quality && loadRequested && active) hls.startLoad();
       });

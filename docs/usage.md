@@ -107,7 +107,7 @@ const player = useHlsPlayer({
 
 The startup deadline runs until readiness. With `hlsConfig.autoStartLoad: false`, it waits for `controls.startLoading()`. The stall deadline watches media-time progress after readiness and suspends while paused, seeking, ended, or hidden. Both share the source's recovery budget. They are disabled by default; `recovery: false` disables them and automatic credential renewal.
 
-Use `state.recovery?.action` to distinguish a loading restart, decoder recovery, reconstruction, or authentication renewal. Recovery finishes when requested playback advances, or when deliberately paused playback is ready. See the [recovery reference](api.md#optional-reliability-controls) for limits.
+Use `state.recovery?.action` to distinguish a loading restart, decoder recovery, reconstruction, or authentication renewal. Recovery finishes when requested playback advances or deliberately paused playback is ready. From [2.1.1](../CHANGELOG.md#211), a deferred stream can also recover its manifest and return to `loading`. Call `controls.startLoading()` when you want it to request media. See the [recovery reference](api.md#optional-reliability-controls).
 
 ## Subscribe to part of the playback state
 

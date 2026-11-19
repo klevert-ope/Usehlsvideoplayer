@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { HlsConfig } from "hls.js";
 import { createPlaybackController } from "./controller.js";
+import { snapshotPlayerOptions } from "./options.js";
 import { initialState } from "./state.js";
 import type {
   PlaybackController,
@@ -127,18 +128,7 @@ function useSession(
     previous.current = {
       video,
       src,
-      options: {
-        ...config,
-        quality: config.quality && { ...config.quality },
-        recovery: config.recovery && { ...config.recovery },
-        request: config.request && {
-          ...config.request,
-          allowedOrigins: [...config.request.allowedOrigins],
-          refreshStatusCodes: config.request.refreshStatusCodes && [
-            ...config.request.refreshStatusCodes,
-          ],
-        },
-      },
+      options: snapshotPlayerOptions(config),
     };
     controller.setSource(video, src, config);
   });

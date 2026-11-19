@@ -70,6 +70,7 @@ const transitions: Readonly<Record<PlaybackStatus, readonly PlaybackStatus[]>> =
       "destroyed",
     ],
     recovering: [
+      "loading",
       "ready",
       "playing",
       "paused",

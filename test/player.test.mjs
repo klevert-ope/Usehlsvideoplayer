@@ -160,6 +160,29 @@ test("React allowlist revocation replaces the old protected session even with a 
   );
 });
 
+test("React replaces a session when a reused hlsConfig changes", async (t) => {
+  const player = await mount(t);
+  const config = { startLevel: 0 };
+  const loaded = [];
+  t.mock.method(Hls, "isSupported", () => true);
+  t.mock.method(Hls.prototype, "loadSource", function () {
+    loaded.push(this.config.startLevel);
+  });
+  t.mock.method(Hls.prototype, "attachMedia", () => {});
+  function Player({ hlsConfig }) {
+    const { videoRef } = useHlsController({ src: "/manifest", hlsConfig });
+    return createElement("video", { ref: videoRef });
+  }
+  await player.renderNode(createElement(Player, { hlsConfig: config }));
+  assert.ok(loaded.length > 0);
+  const initial = [...loaded];
+  assert.ok(initial.every((level) => level === 0));
+  config.startLevel = 2;
+  await player.renderNode(createElement(Player, { hlsConfig: config }));
+  await player.renderNode(createElement(Player, { hlsConfig: { ...config } }));
+  assert.deepEqual(loaded, [...initial, 2]);
+});
+
 test("native HLS handles a late video ref, playback errors and cleanup", async (t) => {
   const player = await mount(t);
   const errors = [];

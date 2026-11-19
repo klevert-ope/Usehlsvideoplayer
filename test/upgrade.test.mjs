@@ -61,7 +61,9 @@ function rig(canRecover = false) {
         record.actions.push(action);
         return canRecover;
       },
-      startLoading() {},
+      startLoading() {
+        record.onStartLoading?.();
+      },
     };
   });
   return { video, controller, sessions };
@@ -109,6 +111,51 @@ test("in-place recovery requires progress and consumes the same finite budget", 
   assert.equal(sessions[0].destroyed, 1);
 });
 
+test("a paused restart with buffered data recovers without another media event", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { controller, video, sessions } = rig(true);
+  t.after(() => controller.destroy());
+  controller.setSource(video, "/vod", {
+    recovery: { maxAttempts: 1, baseDelayMs: 0, attemptTimeoutMs: 10 },
+  });
+  video.ready();
+  sessions[0].context.failed(network);
+  await flush();
+  t.mock.timers.tick(0);
+  assert.equal(controller.getState().status, "ready");
+  assert.equal(controller.getState().recovery.phase, "recovered");
+  t.mock.timers.tick(10);
+  assert.equal(sessions[0].destroyed, 0);
+});
+
+for (const target of [30, 2]) {
+  test(`recovery needs playback progress after seeking from 10 to ${target}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { controller, video, sessions } = rig(true);
+    t.after(() => controller.destroy());
+    controller.setSource(video, "/vod", { recovery: { baseDelayMs: 0 } });
+    video.ready();
+    video.currentTime = 10;
+    await controller.controls.play();
+    sessions[0].context.failed(network);
+    await flush();
+    t.mock.timers.tick(0);
+
+    video.seeking = true;
+    video.currentTime = target;
+    video.dispatch("seeking");
+    video.seeking = false;
+    video.dispatch("timeupdate");
+    video.dispatch("seeked");
+    assert.equal(controller.getState().recovery.phase, "running");
+
+    video.currentTime = target + 0.5;
+    video.dispatch("timeupdate");
+    assert.equal(controller.getState().recovery.phase, "recovered");
+    assert.equal(controller.getState().status, "playing");
+  });
+}
+
 test("a loading restart that makes no progress falls back to reconstruction within the same budget", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { controller, video, sessions } = rig(true);
@@ -140,6 +187,47 @@ test("a loading restart that makes no progress falls back to reconstruction with
   t.mock.timers.tick(100);
   assert.equal(controller.getState().status, "playing");
   assert.equal(sessions.length, 2);
+});
+
+test("deferred recovery remains bounded while the manifest is pending", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { controller, video, sessions } = rig();
+  t.after(() => controller.destroy());
+  controller.setSource(video, "/vod", {
+    hlsConfig: { autoStartLoad: false },
+    recovery: { maxAttempts: 1, baseDelayMs: 0, attemptTimeoutMs: 10 },
+  });
+  sessions[0].context.failed(network);
+  await flush();
+  t.mock.timers.tick(0);
+  assert.equal(sessions.length, 2);
+  t.mock.timers.tick(10);
+  await flush();
+  assert.equal(controller.getState().status, "error");
+  assert.equal(controller.getState().recovery.phase, "exhausted");
+  assert.equal(controller.getState().recovery.attempt, 1);
+});
+
+test("a manifest parsed after an explicit start does not finish recovery early", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { controller, video, sessions } = rig();
+  t.after(() => controller.destroy());
+  controller.setSource(video, "/vod", {
+    hlsConfig: { autoStartLoad: false },
+    recovery: { maxAttempts: 1, baseDelayMs: 0, attemptTimeoutMs: 10 },
+  });
+  sessions[0].context.failed(network);
+  await flush();
+  t.mock.timers.tick(0);
+  sessions[1].onStartLoading = () => {
+    sessions[1].features = { manifestReady: true };
+    sessions[1].context.changed();
+  };
+  assert.equal(controller.controls.startLoading(), true);
+  assert.equal(controller.getState().recovery.phase, "running");
+  t.mock.timers.tick(10);
+  await flush();
+  assert.equal(controller.getState().status, "error");
 });
 
 test("startup and stall watchdogs respect deferred loading, hidden pages and pause", async (t) => {
@@ -216,6 +304,65 @@ test("authentication denial coalesces refresh and cancels a late signed URL", as
   assert.equal(sessions[1].context.url.pathname, "/new");
   assert.doesNotMatch(JSON.stringify(controller.getState()), /secret/);
 });
+
+for (const destroyOnAbort of [false, true]) {
+  test(`renewal abort handlers can ${destroyOnAbort ? "destroy the controller" : "replace the source on the same video"}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { controller, video, sessions } = rig();
+    t.after(() => controller.destroy());
+    const errors = [];
+    controller.onEvent((event) => {
+      if (event.type === "error") errors.push(event.error.code);
+    });
+    let finish;
+    let aborts = 0;
+    controller.setSource(video, "/protected", {
+      recovery: { baseDelayMs: 0 },
+      request: {
+        allowedOrigins: ["https://stream.test"],
+        refreshAuthentication({ signal }) {
+          signal.addEventListener(
+            "abort",
+            () => {
+              aborts++;
+              controller.setSource(video, "/older");
+              if (destroyOnAbort) controller.destroy();
+              controller.setSource(video, "/latest");
+            },
+            { once: true },
+          );
+          return new Promise((resolve) => {
+            finish = resolve;
+          });
+        },
+      },
+    });
+    sessions[0].context.failed(denied);
+    await flush();
+    t.mock.timers.tick(0);
+    assert.equal(typeof finish, "function");
+    controller.setSource(video, "/superseded");
+    finish({ src: "/late-renewal" });
+    await flush();
+    assert.equal(aborts, 1);
+    assert.equal(
+      controller.getState().status,
+      destroyOnAbort ? "destroyed" : "loading",
+    );
+    assert.deepEqual(
+      sessions.map(({ context }) => context.url.pathname),
+      destroyOnAbort ? ["/protected"] : ["/protected", "/latest"],
+    );
+    assert.deepEqual(errors, ["authentication"]);
+    assert.equal(sessions[0].destroyed, 1);
+    if (destroyOnAbort) {
+      const next = rig();
+      t.after(() => next.controller.destroy());
+      next.controller.setSource(video, "/after-destroy");
+      assert.equal(next.sessions.length, 1);
+    }
+  });
+}
 
 test("renewal revalidates origins, times out, and never retries a declined renewal", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });

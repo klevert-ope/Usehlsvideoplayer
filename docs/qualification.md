@@ -25,7 +25,8 @@ Dispatch **Validate and package** for the release branch with `gh workflow run c
 
 ## Publish from a maintainer's machine
 
-1. Push the release commit. Check out that commit with a clean working tree and run `npm ci --ignore-scripts`. Run the package checks and record any failed or unrun checks, including physical Android qualification.
-2. Run `npm pack --json` and record the tarball name and integrity. Inspect the file list before publishing.
-3. Run `npm login --auth-type=web` if the npm session has expired. Publish the tarball with `npm publish ./usehlsvideoplayer-X.Y.Z.tgz --ignore-scripts --access public --tag latest`, substituting the release version. Complete npm's browser approval if prompted.
-4. Run `npm view usehlsvideoplayer@X.Y.Z dist.integrity` and compare the value with `npm pack`. Run `npm dist-tag ls usehlsvideoplayer` to confirm the `latest` tag. Tag the published commit with the matching `vX.Y.Z` Git tag and push it.
+1. Stage the release changes, including the changelog and matching versions in `package.json` and `package-lock.json`. Run the package checks and record any failed or unrun checks, including physical Android qualification.
+2. Run `git diff --exit-code` to confirm the working files match the staged release, then run `npm pack --json`. Inspect the file list and record the tarball name and integrity. Keep the staged files stable through publication.
+3. Run `npm whoami` to check the active npm account. If the session has expired, run `npm login --auth-type=web`. Publish the verified tarball with `npm publish ./usehlsvideoplayer-X.Y.Z.tgz --ignore-scripts --access public --tag latest`, substituting the release version. Complete npm's browser approval if prompted.
+4. Compare `npm view usehlsvideoplayer@X.Y.Z dist.integrity` with the pack result. Confirm that `npm dist-tag ls usehlsvideoplayer` shows the release as `latest`.
+5. Commit the staged release, create the matching `vX.Y.Z` tag and push both. Verify that the remote branch and tag point to the release commit.

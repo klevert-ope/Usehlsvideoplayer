@@ -7,17 +7,29 @@ Install the lockfile with `npm ci --ignore-scripts`. CI runs on pushes to `maste
 - Run `npm run typecheck`, `npm run lint`, `npm run format:check` and `npm test`. The tests exercise source ownership, native adapter attachment and cleanup, recovery deadlines, stale callbacks, React Strict Mode and selective subscriptions.
 - Run `npm run check:package` to install and exercise the packed library in isolated consumers. Set `CHECK_NEXT=1` to include Next.js prerendering and request-time SSR. CI also audits the lockfile and checks registry signatures.
 - With FFmpeg on PATH, run `npm run fixtures`, `npx playwright install chromium firefox` and `npm run test:browser`. CI runs Chrome, Edge and Firefox against one fixture set. CI caches the fixtures by generator version. The Firefox job installs the system H.264 decoder separately. Set `PLAYWRIGHT_CHANNEL=chrome` or `msedge` to use an installed Chromium browser locally.
-- The browser suite uses local media for rendition changes, alternate tracks, recovery, protected requests and LL-HLS blocking reloads. The lifecycle regression reuses one video element across live CMAF and AES-128 sessions. It waits for presented frames, observes distinct key requests and checks MediaSource URL revocation, media reset, interval cleanup and completion or cancellation of fixture requests after each destruction.
+- The browser suite uses local media for rendition changes, alternate tracks, recovery and protected requests. The lifecycle regression reuses one video element across live CMAF and AES-128 sessions. It checks presented frames, distinct key requests, MediaSource URL revocation, media reset, interval cleanup and request completion or cancellation after each teardown.
 
 The CI audit blocks moderate or higher findings and checks registry signatures on Node 24. `npm run audit:ci` reports the temporary exception for `picomatch` 4.0.7 and accepts only the named advisory on development-only lockfile entries. The runtime audit has no exceptions. Remove the exception when the lockfile can use a patched version. [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)
 
 Safari and iOS decoding, multi-hour memory growth and native decoder resource use are outside this suite. See the [compatibility guide](compatibility.md).
 
-Set `PUBLIC_LL_HLS` to a public LL-HLS manifest to check an origin's partial segments and blocking reloads. Keep signed or private URLs out of this input, traces and artefacts.
+## Low-Latency HLS
+
+The local browser suite checks partial segments, blocking reloads and live seeking. The two-rendition fixture also checks consecutive delta updates, a full reload when skipped history is missing, and a manual switch to 360p using a rendition report. The browser tests check playlist requests and presented frames. [Recorded browser results](verification-report.md#ll-hls-delta-and-rendition-report-checks)
+
+After generating the fixtures and installing the browsers, run the three delta and rendition-report tests with the following command.
+
+```sh
+node node_modules/@playwright/test/cli.js test --grep "LL-HLS (merges|requests a full|uses a rendition)"
+```
+
+For a separate origin smoke test, set `PUBLIC_LL_HLS` to a public LL-HLS manifest. The test checks partial segments, successful blocking reloads and presented frames. Use a public, unsigned URL and keep private URLs out of traces and artefacts. Deployment qualification needs the intended encoder, CDN, codecs and network conditions. [Browser compatibility](compatibility.md)
 
 ## Physical Android runner
 
 Register the `hls-device-android` runner with a physical Android device, Chrome, FFmpeg and Appium UiAutomator2. Restrict its runner group to the qualification workflow on protected `master`. Set `DEVICE_DRIVER` to the WebDriver endpoint, `DEVICE_CAPABILITIES` to the Android Chrome capability object with its physical UDID, and `DEVICE_FIXTURE_ORIGIN` to the runner's private LAN origin on port 4175 as reachable by the device. The probe checks the fixture revision, presented frames, engine and teardown.
+
+Dispatch **Android playback qualification** on `master`. Record the run and the revision in its `device-android` artefact alongside the desktop results. Record the check as unrun when a physical device or its runner is unavailable.
 
 ## Build a candidate in GitHub Actions
 

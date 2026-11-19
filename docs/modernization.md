@@ -1,6 +1,6 @@
 # Modernization review
 
-This is the historical review of the initial controller implementation. Test counts, package sizes, and browser measurements below refer to that work. See the [upgrade verification report](verification-report.md) for the later recovery, authentication, quality, and metrics changes and their release limits.
+This historical review covers the initial controller implementation. The test counts, package sizes and browser measurements describe that revision. [Current roadmap](engineering-roadmap.md) · [Later LL-HLS verification](verification-report.md#ll-hls-delta-and-rendition-report-checks)
 
 The [initial audit](audit.md) records the starting defects, their severity and the implementation sequence. The [API](api.md) and [security policy](../SECURITY.md) describe the runtime contracts.
 
@@ -53,6 +53,8 @@ The packed root and core entries passed ESM, CommonJS, strict declaration and SS
 
 ## Original release qualification notes
 
-The candidate workflow runs hosted package and browser checks, including native HLS, before building a tarball and SBOM. The external LL-HLS smoke test on Windows Chromium used the [Mux sample listed by hls.js](https://github.com/video-dev/hls.js/blob/master/tests/test-streams.js). Playback decoded video and advanced while the live origin advertised partial segments and returned successful blocking playlist reloads. The repository maintainer owns dependency review. The hls.js range stays within the verified 1.7 minor because the restricted loader relies on the upstream FetchLoader handoff. The lockfile and automated update PRs support reviewing hls.js advisories and removing the temporary minimatch override when upstream ranges permit.
+The candidate workflow ran hosted package and browser checks, including native HLS, before building a tarball and SBOM. The external LL-HLS smoke test decoded and advanced video in Windows Chromium while the live origin returned partial segments and successful blocking playlist reloads. [Sample listed by hls.js](https://github.com/video-dev/hls.js/blob/master/tests/test-streams.js)
+
+The repository maintainer owns dependency review. The hls.js range stays within the verified 1.7 minor because the restricted loader relies on the upstream FetchLoader handoff. The lockfile and automated update PRs support reviewing advisories and removing the temporary minimatch override when upstream ranges permit.
 
 For the current release process, see [qualification and release setup](qualification.md). The previous tag-triggered workflow and environment-free npm trust setup are superseded.

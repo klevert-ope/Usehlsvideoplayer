@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added desktop browser tests for Low-Latency HLS (LL-HLS) delta updates, full-playlist fallback when history is missing, and a rendition-report switch that presents 360p frames. [Verification results](docs/verification-report.md#ll-hls-delta-and-rendition-report-checks)
+
 ## 2.1.1
 
 - Fixed source replacement and teardown when a credential-renewal abort handler changes the source.

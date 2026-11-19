@@ -1,6 +1,20 @@
 # Engineering upgrade verification
 
-This report records local checks for 2.1.1, the 2.1.0 release checks and two earlier 30-minute workloads. The [qualification runbook](qualification.md) defines the current release checks.
+This report records the LL-HLS working-tree checks, verification for versions 2.1.1 and 2.1.0, and the original upgrade evidence. The [qualification runbook](qualification.md) defines the current release checks.
+
+## LL-HLS delta and rendition report checks
+
+Chrome, Edge and Firefox passed all 65 browser tests across the three runs. The new checks used aligned 180p and 360p CMAF media. They observed consecutive delta responses that omit older segments, a full reload that preserves the requested segment and part when history is missing, and a rendition-report switch that presents 360p frames. The full runs also covered delayed media requests, blocking reloads and DVR seeking. The results cover desktop hls.js playback against the local fixture. [HLS draft delivery directives](https://datatracker.ietf.org/doc/html/draft-pantos-hls-rfc8216bis-22#section-6.2.5)
+
+| Browser              | Playwright project | `PLAYWRIGHT_CHANNEL` | `PLAYWRIGHT_PORT` | Full suite |
+| -------------------- | ------------------ | -------------------- | ----------------- | ---------- |
+| Chrome 157.0.8103.81 | `chromium`         | `chrome`             | `4183`            | 22 passed  |
+| Edge 157.0.4341.60   | `chromium`         | `msedge`             | `4184`            | 22 passed  |
+| Firefox 159.0        | `firefox`          | unset                | `4185`            | 21 passed  |
+
+Each browser ran `node node_modules/@playwright/test/cli.js test --project=<project>` after `npm run fixtures`. `npm test` passed all 47 tests. Type checking, lint and formatting also passed.
+
+The runs used Windows 11 and Node 26.12.1 with a working tree based on `b171cfc54d7b5e5c0cd7316ccebb7e8fb35964f2`. The SHA-256 of `git diff --binary HEAD -- scripts/fixtures.mjs scripts/ll-fixture.mjs test/browser/streaming.spec.mjs vite.config.mjs` was `a9d1bee0e53924578f797ed088eb5aa36ae6aa06bac43ef91f75458cce81b116`. [Outstanding qualification](engineering-roadmap.md#outstanding-qualification)
 
 ## Version 2.1.1 checks
 
@@ -102,7 +116,7 @@ Soak measurements cover renderer JavaScript heap, DOM/listeners, detached roots,
 
 ## Remaining risks and release recommendation
 
-At the time of this report, exact-candidate device and long-session evidence was outstanding. The observations below apply to the measured upgrade.
+These findings and the release recommendation describe the original upgrade before 2.1.0. Exact-candidate device and long-session evidence was outstanding at the time. [Current roadmap](engineering-roadmap.md) · [Release procedure](qualification.md)
 
 - Native HLS cannot enforce injected headers, per-request origins or reliable HTTP-status renewal. Its decoder recovery and stall behaviour still need real devices.
 - Proactive credential rotation, server authorisation, cross-player refresh coordination, CORS/cookies and CDN trust remain application responsibilities. Reactive retries remain finite.

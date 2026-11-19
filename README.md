@@ -49,7 +49,8 @@ The `usehlsvideoplayer/core` entry works without React. See how to [attach a str
 - [Playback API reference](docs/api.md) for options, commands, state, events, and metrics.
 - [Browser compatibility](docs/compatibility.md) and [playback troubleshooting](docs/troubleshooting.md).
 - [Migrate from 1.x](docs/migration.md) if you use `Usehlsplayer` or `useHlsVideoPlayer`.
-- [Upgrade verification](docs/verification-report.md) for recorded results and remaining release gates, and the [engineering roadmap](docs/engineering-roadmap.md) for implementation decisions.
+- [Engineering roadmap](docs/engineering-roadmap.md) for completed milestones, outstanding qualification and optional integrations.
+- [Verification results](docs/verification-report.md) for the tested revisions and results, including LL-HLS browser coverage.
 - [Security policy](SECURITY.md) for request policy limits and private vulnerability reporting.
 
 ## Development
@@ -67,7 +68,7 @@ npm run fixtures
 npm run dev
 ```
 
-Open the local URL printed by Vite to play generated VOD, live, alternate audio, and captions. See [playback qualification](docs/qualification.md) for local browser checks and the release process. The [engineering record](docs/modernization.md) tracks the package and playback changes.
+Open the local URL printed by Vite to play generated VOD, live, alternate audio and captions. The [qualification runbook](docs/qualification.md) explains how to run the browser checks and prepare a release.
 
 The build uses the TypeScript 7 package aliased as `typescript-native`. TypeScript 6 supplies the compiler API used by ESLint. Run the npm scripts to select the intended compiler.
 

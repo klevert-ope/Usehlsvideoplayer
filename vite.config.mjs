@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import { llFixture } from "./scripts/ll-fixture.mjs";
+import { llFixture, llLadderFixture } from "./scripts/ll-fixture.mjs";
 import { encryptedFixture } from "./scripts/encrypted-fixture.mjs";
 import { readFileSync } from "node:fs";
 
@@ -34,6 +34,7 @@ export default defineConfig({
           response.end(process.env.GITHUB_SHA ?? "local");
         });
         server.middlewares.use("/live/ll.m3u8", llFixture(boot));
+        server.middlewares.use("/live/ll-ladder", llLadderFixture(boot));
         server.middlewares.use("/live/stream.m3u8", (_req, res) => {
           const sequence = Math.floor((Date.now() - boot) / 1000);
           const segments = Array.from({ length: 6 }, (_, offset) => {

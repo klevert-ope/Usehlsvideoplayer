@@ -1,124 +1,43 @@
 # Engineering roadmap
 
-## Implementation status
+The recovery, authentication, quality and metrics upgrades shipped in 2.1.0. Version 2.1.1 fixed recovery and source lifecycle edge cases. The latest LL-HLS work adds desktop browser coverage in the working tree based on 2.1.1. [Changelog](../CHANGELOG.md) · [Verification report](verification-report.md)
 
-The local upgrade implements the recovery, authentication, quality, metrics, and integration work below. The [verification report](verification-report.md) records 37 fast tests, Chrome and Firefox playback checks, packed consumers, and two local 30-minute soak workloads. Those browser and endurance results identify the recorded runtime fingerprint, rather than a subsequently committed release SHA.
+## Completed milestones
 
-The [qualification runbook](qualification.md) defines the current release checks, including physical Android. The milestones below record the original plan. Its Safari and timed endurance gates have been retired.
+| Milestone                             | Outcome                                                                                                                                                                                                                                                                                               |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1 Reproducible baseline              | CI checks clean lockfile installs, builds, types, lint, formatting and audits. Packed consumers exercise the ESM and CommonJS exports, React compatibility and server rendering.                                                                                                                      |
+| M2 Recovery                           | hls.js can restart loading or recover a decoder before the controller falls back to rebuilding the engine. Recovery shares a finite budget per source. Startup and stall deadlines are opt-in. Live recovery preserves live-edge or DVR intent where possible.                                        |
+| M3 Authentication                     | Applications can supply abortable asynchronous headers and renew credentials through a single callback in flight per source. Refreshed URLs still have to match the existing origin policy. Native HLS consumers replace signed sources in the application.                                           |
+| M4 Quality and metrics                | Applications can set automatic quality preferences and override them manually. Opt-in metrics distinguish startup, first presented frame, rebuffering and recovery.                                                                                                                                   |
+| M5 Examples and desktop qualification | The usage guide covers React, Next.js and the core controller. Chrome, Edge and Firefox exercise real decoding, protected requests and teardown. The local LL-HLS fixture now checks blocking reloads, delta updates, full-playlist fallback and a rendition-report switch that presents 360p frames. |
 
-## Baseline and decisions
+See the [API reference](api.md), [security policy](../SECURITY.md) and [LL-HLS verification results](verification-report.md#ll-hls-delta-and-rendition-report-checks) for contracts and evidence.
 
-Planning baseline: `685c5c8d1f7439daf9e2969c1a57439596c3f450` plus the then-uncommitted candidate. The following baseline assessments describe that earlier tree, before this upgrade.
+## Outstanding qualification
 
-CONFIRMED: a framework-independent controller, native/hls.js adapters, guarded source ownership, React external-store hooks, legacy adapters, bounded retries, exact-origin restricted requests, sanitised errors, optional metrics and dual-format packaging already exist. The planning baseline passed 24 fast tests, 12 Chromium cases, 10 Firefox cases, strict types, lint, package consumers and npm audit. Formatting failed in troubleshooting documentation. Native WebKit skipped on Windows.
+| Item                            | Next step                                                                                                                                               | Evidence to record                                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Physical Android playback       | Provision the dedicated runner and connect a physical device. The repository had no registered runner at the last check.                                | Successful `device-android` run and artefact for the tested commit, with presented frames and teardown.                                       |
+| Deployment-specific LL-HLS      | Test a representative stream from the intended encoder and CDN. Check partial segments, blocking reloads and the playlist features the deployment uses. | Origin and browser conditions, playlist requests and playback results. Measure glass-to-glass latency if the deployment has a latency target. |
+| Long-running encrypted playback | When a deployment rotates AES-128 key URLs, measure a continuous session at its expected rotation rate and duration.                                    | Playback continuity and resource trends across key rotation and teardown.                                                                     |
 
-PARTIAL: all fatal recoveries rebuild the engine; native stalls have no deadline; credentials are synchronous without coordinated renewal; diagnostics lack recovery/session/quality measurements. A fake-clock native-adapter probe remained buffering after five minutes; this is not a reproduced Safari defect.
+The current release procedure records physical Android results separately. Safari and iOS decoding, native decoder resource use and multi-hour stability remain unverified by the current suite. The earlier Safari and fixed-duration soak release gates are retired. [Qualification and release runbook](qualification.md) · [Historical verification](verification-report.md#performance-and-resource-evidence)
 
-UNVERIFIED: physical Safari/iOS/Android, current-candidate long soaks, deployment-specific LL-HLS, native decoder memory and rotating encrypted-key retention. Historical qualification is not current-candidate evidence.
+## Optional integrations and deferred features
 
-NOT APPLICABLE: custom streaming/ABR engines, an authentication service, mandatory telemetry or a mandatory UI framework.
+| Feature                            | Decision                                                                                                                                        |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| AirPlay and Chromecast             | A native AirPlay recipe and an optional Chromecast integration remain open. Keep casting dependencies outside the core.                         |
+| DRM                                | A dedicated integration remains optional. The application can configure upstream DRM for trusted streams. Restricted request mode disables EME. |
+| Offline VOD                        | Defer until storage, eviction, licensing and service-worker ownership are defined.                                                              |
+| Advanced subtitles                 | Keep upstream and browser track support. Defer specialised rendering.                                                                           |
+| Position persistence and playlists | Applications own saved position, privacy, expiry and playlist state. Use source replacement to move between streams.                            |
+| Accessible UI package              | Keep native controls in examples. A separate UI package remains optional.                                                                       |
+| OpenTelemetry                      | The usage guide describes an application-owned bridge. Export and network activity stay in the application.                                     |
 
-Decisions: application-owned abortable authentication renewal; automatic quality preferences with manual override; preserve the physical-device and 30-minute, six-hour, and 24-hour release gates. Committing and pushing repository work does not satisfy these release gates.
+See the [telemetry guidance](usage.md#bridge-application-telemetry) and [request-policy limits](../SECURITY.md).
 
-## Prioritised milestones
+## Historical record
 
-### M1 — Reproducible baseline (high impact, low complexity/cost)
-
-Problem → Current evidence spans different revisions and the formatting gate fails.
-
-Evidence → Executed baseline checks above and the dirty-tree inventory.
-
-Alternatives → Rewrite tooling or retain and refresh the existing checks.
-
-Recommendation → Retain tooling; update compatible development dependencies, preserve the TypeScript compiler/lint split while the lint peer range requires it, and fix formatting.
-
-Implementation → Isolated clean installation, explicit candidate identity, packed consumers and a final verification report.
-
-Tests → Installation, build, lint, formatting, declarations, package exports, SSR and audits.
-
-Acceptance → Reproducible checks with explicit outcomes and no unexplained package changes.
-
-### M2 — Recovery (high impact/likelihood, medium complexity/cost)
-
-Problem → Unconditional engine recreation discards useful engine state; silent stalls can persist.
-
-Evidence → Controller fatal-failure path and native-adapter fake-clock probe.
-
-Alternatives → Leave recovery unchanged; create a custom buffer controller; use upstream recovery with bounded fallback.
-
-Recommendation → Use hls.js loading restart and supported decoder recovery; reconstruct when unavailable or unsuccessful. Keep upstream ABR, gap handling and non-fatal retries.
-
-Implementation → Optional adapter recovery operations; every action consumes the existing source-wide budget. Require progress for requested playback. Add opt-in startup/stall deadlines, cancel stale work, preserve near-edge versus DVR intent, and retain default retry/backoff limits.
-
-Tests → Duplicate errors, recovery timeout/exhaustion, source replacement, reentrancy, pause/seek, hidden-page suspension, deferred loading, live restoration and actual interruption recovery.
-
-Acceptance → Recovery either makes progress or terminates within its configured budget; no concurrent retries or stale publications. Omitted watchdogs preserve prior behaviour.
-
-### M3 — Authentication (high impact, medium complexity/cost)
-
-Problem → Expiring credentials require application orchestration without SDK cancellation or coalescing.
-
-Evidence → RequestOptions accepts synchronous headers only; authentication failures are terminal.
-
-Alternatives → Recipes only; SDK-managed identity integrations; application callbacks.
-
-Recommendation → Application callbacks with no token storage, identity dependency or native interception promise.
-
-Implementation → Async headers with AbortSignal; optional refreshAuthentication callback; one refresh in flight per source; default 401 handling with explicit 403 opt-in; bounded timeout and existing source-wide recovery budget. Revalidate refreshed signed URLs against the unchanged allowlist. Proactive renewal belongs in the application credential provider.
-
-Tests → Concurrent expiry, rejection, timeout, source revocation, ignored cancellation, malformed/foreign URLs, redirects, malicious child/key/segment URLs and credential-safe diagnostics.
-
-Acceptance → No request/provider invocation for forbidden origins; late credentials cannot revive an old session; failed renewal terminates safely. Native consumers replace signed sources themselves.
-
-### M4 — Quality preferences and measurements (medium impact, medium complexity/cost)
-
-Problem → Applications cannot cap automatic quality through the controller; recovery and quality effects are hard to measure.
-
-Evidence → Manual selection and basic metrics exist, but preference and diagnostic fields do not.
-
-Alternatives → Custom ABR/telemetry frameworks; upstream controls and existing snapshots.
-
-Recommendation → Optional maxHeight/maxBitrate/startBitrate preferences mapped to hls.js; lowest-rendition fallback and manual override. No separate downgrade algorithm.
-
-Implementation → Conservative automatic cap; optional session/recovery/failure/quality/bandwidth/first-frame metrics; optional recovery action field with unchanged event discriminants.
-
-Tests → Unordered ladders, no matching rendition, manual/auto transitions, default behaviour, metric arithmetic, no collection while disabled, privacy and browser decoding.
-
-Acceptance → Playback remains functional without preferences, defaults remain upstream-owned, and disabled telemetry adds no sampler/frame observer.
-
-### M5 — Integration and qualification (high impact, medium ongoing cost)
-
-Problem → New contracts need examples and evidence beyond unit tests.
-
-Evidence → Existing playground, packed consumers and qualification lanes provide reusable infrastructure.
-
-Alternatives → New demo/test frameworks; extend existing infrastructure.
-
-Recommendation → Extend existing playground/docs/tests and retain strict release gates.
-
-Implementation → React/Next/core examples, authentication and data-saving recipes, declaration compatibility, adversarial browser tests, final changeset review and docs/verification-report.md.
-
-Tests → Fast/property tests; Chromium/Firefox decode; Next production build; native/device lanes; resource soak, rotating encrypted keys and real origins where available.
-
-Acceptance → Report PASSED/FAILED/BLOCKED/NOT_RUN with exact commands and revision identity. Missing physical/device/endurance evidence blocks release, not local implementation.
-
-## Interfaces, compatibility and migration
-
-Preserve package exports, module formats, legacy hooks, existing event discriminants and custom adapters. New adapter methods and diagnostic fields are optional. Synchronous header callbacks remain assignable. New watchdogs are opt-in. No new runtime dependency. Additive APIs warrant a future minor release; this work does not publish or change release authority.
-
-Maintain separate startup-to-playing and first-presented-frame measurements. Existing rebuffer ratio excludes recovery; add recovery duration rather than silently change its denominator. Request URLs, headers, raw errors and manifest labels must never enter SDK diagnostics. Applications own token issuance, cross-player renewal coordination, CORS/cookies and CDN authorisation.
-
-## Advanced feature decisions and risks
-
-| Feature                     | Decision                                                                                              |
-| --------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Offline VOD                 | Defer: storage, eviction, licensing and service-worker ownership require a separate product contract. |
-| DRM                         | Optional integration, not restricted request mode or core identity machinery.                         |
-| Advanced subtitles          | Keep existing upstream/browser support; defer specialised rendering.                                  |
-| Position persistence        | Application-owned, with explicit privacy and expiry policy.                                           |
-| Playlists/source management | Application-owned; use source replacement.                                                            |
-| Accessible UI               | Optional separate package/project; retain native controls in examples.                                |
-| AirPlay/Chromecast          | Native AirPlay recipe and optional casting integration; no core dependency.                           |
-| OpenTelemetry               | Application bridge recipe; no mandatory exporter or network activity.                                 |
-
-Native media does not expose reliable HTTP statuses or request hooks. Quality preferences are not hard bandwidth/security limits. Browser scheduling, codecs and device implementations affect recovery. The existing upstream shared-logger and rotating-key retention concerns need explicit qualification; do not patch private hls.js internals. Preserve hardware/endurance release gates even when runners are unavailable.
+The original milestone plan used commit `685c5c8d1f7439daf9e2969c1a57439596c3f450` and the working tree of that upgrade. The verification report preserves the candidate identities, original test results and measured resource costs. The production-readiness audit records the earlier upstream logger and rotating-key findings. [Verification report](verification-report.md) · [Production-readiness audit](../PRODUCTION-READINESS-AUDIT.md) · [Initial controller review](modernization.md)

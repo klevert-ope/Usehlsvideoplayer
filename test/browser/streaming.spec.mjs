@@ -21,8 +21,9 @@ async function start(page, source, options = {}) {
         firstFrameMs: null,
       };
       const attachment = performance.now();
-      video.requestVideoFrameCallback(function frame() {
+      video.requestVideoFrameCallback(function frame(_now, { height }) {
         sample.frames++;
+        sample.frameHeight = height;
         sample.firstFrameMs ??= performance.now() - attachment;
         video.requestVideoFrameCallback(frame);
       });
@@ -325,6 +326,204 @@ test("LL-HLS decodes partial media across delayed requests and uses blocking pla
     path,
     contentType: "application/json",
   });
+});
+
+const ladder = "/live/ll-ladder/master.m3u8";
+const lowPlaylist = "/live/ll-ladder/low.m3u8";
+const highPlaylist = "/live/ll-ladder/high.m3u8";
+const ladderOptions = {
+  lowLatency: true,
+  quality: { maxHeight: 180 },
+  recovery: false,
+};
+const mediaSequenceTag = /#EXT-X-MEDIA-SEQUENCE:(\d+)/;
+const skipTag = /#EXT-X-SKIP:SKIPPED-SEGMENTS=(\d+)/;
+
+async function livePlayback(page) {
+  return page.evaluate(() => {
+    const { controller, sample } = window.fixture;
+    const { live, status } = controller.getState();
+    return { edge: live.edge, status, ...sample };
+  });
+}
+
+test("LL-HLS merges consecutive playlist delta updates during playback", async ({
+  page,
+}) => {
+  const playlists = [];
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (url.pathname === lowPlaylist) {
+      playlists.push({
+        skip: url.searchParams.get("_HLS_skip"),
+        body: response.ok() ? response.text().catch(() => null) : null,
+      });
+    }
+  });
+  await start(page, ladder, ladderOptions);
+  await expect.poll(() => playlists.length).toBeGreaterThanOrEqual(3);
+  const [full, ...deltas] = playlists.slice(0, 3);
+  expect(full.skip).toBeNull();
+  const fullBody = await full.body;
+  expect(fullBody).toContain("CAN-SKIP-UNTIL=12");
+  expect(fullBody).not.toMatch(skipTag);
+  expect(fullBody.match(/#EXTINF:/g)).toHaveLength(10);
+  for (const delta of deltas) {
+    expect(delta.skip).toBe("YES");
+    const body = await delta.body;
+    const skipped = Number(body?.match(skipTag)?.[1]);
+    expect(skipped).toBeGreaterThan(0);
+    expect(body.match(/#EXTINF:/g)).toHaveLength(10 - skipped);
+  }
+
+  await expect
+    .poll(async () => (await livePlayback(page)).status)
+    .toBe("playing");
+  const before = await livePlayback(page);
+  expect(before.edge).not.toBeNull();
+  await expect
+    .poll(async () => (await livePlayback(page)).frames)
+    .toBeGreaterThan(before.frames + 12);
+  await expect
+    .poll(async () => (await livePlayback(page)).edge)
+    .toBeGreaterThan(before.edge);
+  await expect
+    .poll(async () => (await livePlayback(page)).status)
+    .toBe("playing");
+  expect(playlists.slice(1).every(({ skip }) => skip === "YES")).toBe(true);
+});
+
+test("LL-HLS requests a full playlist when a delta skips unknown history", async ({
+  page,
+}) => {
+  let initialStart;
+  let injected;
+  let fallback;
+  await page.route(
+    (url) => url.pathname === lowPlaylist,
+    async (route) => {
+      if (injected) {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      const body = await response.text();
+      if (initialStart === undefined) {
+        initialStart = Number(body.match(mediaSequenceTag)?.[1]);
+        await route.fulfill({ response });
+        return;
+      }
+      const start = Number(body.match(mediaSequenceTag)?.[1]);
+      const skipped = Number(body.match(skipTag)?.[1]);
+      const unknownStart = initialStart - 1;
+      expect(skipped).toBeGreaterThan(0);
+      expect(start).toBeGreaterThan(unknownStart);
+      // Keep each returned segment at the same sequence number while introducing
+      // an older skipped entry the player could not have learned from the origin.
+      const incomplete = body
+        .replace(mediaSequenceTag, `#EXT-X-MEDIA-SEQUENCE:${unknownStart}`)
+        .replace(
+          skipTag,
+          `#EXT-X-SKIP:SKIPPED-SEGMENTS=${skipped + start - unknownStart}`,
+        );
+      injected = new URL(route.request().url());
+      await route.fulfill({ response, body: incomplete });
+    },
+  );
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (
+      injected &&
+      !fallback &&
+      url.pathname === lowPlaylist &&
+      !url.searchParams.has("_HLS_skip") &&
+      response.ok()
+    ) {
+      fallback = response;
+    }
+  });
+
+  await start(page, ladder, ladderOptions);
+  await expect.poll(() => Boolean(fallback)).toBe(true);
+  const body = await fallback.text();
+  expect(body).not.toMatch(skipTag);
+  expect(body.match(/#EXTINF:/g)).toHaveLength(10);
+  const fullRequest = new URL(fallback.url());
+  for (const directive of ["_HLS_msn", "_HLS_part"])
+    expect(fullRequest.searchParams.get(directive)).toBe(
+      injected.searchParams.get(directive),
+    );
+  const before = await livePlayback(page);
+  await expect
+    .poll(async () => (await livePlayback(page)).frames)
+    .toBeGreaterThan(before.frames + 12);
+  await expect
+    .poll(async () => (await livePlayback(page)).status)
+    .toBe("playing");
+});
+
+test("LL-HLS uses a rendition report to switch and present 360p frames", async ({
+  page,
+}) => {
+  const reportTag =
+    /#EXT-X-RENDITION-REPORT:URI="high\.m3u8",LAST-MSN=(\d+),LAST-PART=(\d+)/;
+  const reports = [];
+  let switchRequest;
+  let highMedia = false;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === highPlaylist && !switchRequest)
+      switchRequest = { url, reports: [...reports] };
+  });
+  page.on("response", (response) => {
+    if (!response.ok()) return;
+    const { pathname } = new URL(response.url());
+    if (pathname === lowPlaylist)
+      reports.push(
+        response.text().then(
+          (body) => body.match(reportTag),
+          () => null,
+        ),
+      );
+    if (/^\/fixtures\/cmaf-high\/(part|segment)\d+\.m4s$/.test(pathname))
+      highMedia = true;
+  });
+
+  await start(page, ladder, ladderOptions);
+  await expect
+    .poll(async () => (await livePlayback(page)).frameHeight)
+    .toBe(180);
+  expect(switchRequest).toBeUndefined();
+  const switched = await page.evaluate(() => {
+    const { controller } = window.fixture;
+    const level = controller
+      .getState()
+      .quality.levels.find(({ height }) => height === 360);
+    return level && controller.controls.setQuality(level.id);
+  });
+  expect(switched).toBe(true);
+  await expect.poll(() => Boolean(switchRequest)).toBe(true);
+  const msn = switchRequest.url.searchParams.get("_HLS_msn");
+  const part = switchRequest.url.searchParams.get("_HLS_part");
+  expect(msn).toMatch(/^\d+$/);
+  expect(part).toMatch(/^\d+$/);
+  const requested = Number(msn) * 4 + Number(part);
+  const advertised = (await Promise.all(switchRequest.reports))
+    .filter(Boolean)
+    .map(([, sequence, index]) => Number(sequence) * 4 + Number(index));
+  // hls.js may request the next part if the previous playlist has aged.
+  expect(
+    advertised.some(
+      (position) => requested === position || requested === position + 1,
+    ),
+  ).toBe(true);
+  await expect.poll(() => highMedia).toBe(true);
+  await expect
+    .poll(async () => (await livePlayback(page)).frameHeight)
+    .toBe(360);
+  await expect
+    .poll(async () => (await livePlayback(page)).status)
+    .toBe("playing");
 });
 
 async function origin(t, handler) {

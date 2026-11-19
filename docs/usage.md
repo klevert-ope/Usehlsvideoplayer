@@ -69,7 +69,7 @@ export function LivePlayer({ src }: { src: string }) {
 }
 ```
 
-For LL-HLS, serve an LL-HLS playlist with partial segments and blocking reloads. The origin and CDN need to support those requests. To offer rewind on a live stream, keep enough segments in the live playlist and available on the server.
+`lowLatency: true` enables low-latency mode on the hls.js path. For Low-Latency HLS (LL-HLS), serve partial segments and configure the origin and CDN to handle blocking playlist reloads. Test with the encoder and CDN your viewers use. For live rewind, keep enough segments in the live playlist and available on the server. [API options](api.md#options) · [Playback qualification](qualification.md#low-latency-hls)
 
 ## Add quality, audio, and subtitle choices
 

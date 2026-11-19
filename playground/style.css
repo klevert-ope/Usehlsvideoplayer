@@ -31,6 +31,10 @@ select {
   font: inherit;
   padding: 0.35rem 0.6rem;
 }
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
 dl {
   display: grid;
   grid-template-columns: max-content 1fr;

@@ -1,6 +1,6 @@
 # Engineering roadmap
 
-The recovery, authentication, quality and metrics upgrades shipped in 2.1.0. Version 2.1.1 fixed recovery and source lifecycle edge cases. The latest LL-HLS work adds desktop browser coverage in the working tree based on 2.1.1. [Changelog](../CHANGELOG.md) · [Verification report](verification-report.md)
+Version 2.1.0 added recovery, authentication, quality and metrics options. Version 2.1.1 fixed recovery and source lifecycle issues. The unreleased changes add LL-HLS browser coverage, a VOD playlist example and integration recipes. [Changelog](../CHANGELOG.md#unreleased) · [Verification report](verification-report.md)
 
 ## Completed milestones
 
@@ -26,17 +26,18 @@ The current release procedure records physical Android results separately. Safar
 
 ## Optional integrations and deferred features
 
-| Feature                            | Decision                                                                                                                                        |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| AirPlay and Chromecast             | A native AirPlay recipe and an optional Chromecast integration remain open. Keep casting dependencies outside the core.                         |
-| DRM                                | A dedicated integration remains optional. The application can configure upstream DRM for trusted streams. Restricted request mode disables EME. |
-| Offline VOD                        | Defer until storage, eviction, licensing and service-worker ownership are defined.                                                              |
-| Advanced subtitles                 | Keep upstream and browser track support. Defer specialised rendering.                                                                           |
-| Position persistence and playlists | Applications own saved position, privacy, expiry and playlist state. Use source replacement to move between streams.                            |
-| Accessible UI package              | Keep native controls in examples. A separate UI package remains optional.                                                                       |
-| OpenTelemetry                      | The usage guide describes an application-owned bridge. Export and network activity stay in the application.                                     |
+| Feature                            | Decision                                                                                                                                                                                             |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AirPlay                            | The [native Safari recipe](usage.md#use-airplay-from-safari) is available. The [physical receiver check](qualification.md#airplay-device-check) is pending.                                          |
+| Chromecast                         | Plan a standalone HTTPS sender with Google's Default Media Receiver when a physical receiver and a public unencrypted HLS VOD with CORS are available.                                               |
+| DRM                                | Revisit a dedicated integration with a target key system, devices, licensed stream and test licence endpoint. Trusted applications can configure upstream DRM. Restricted request mode disables EME. |
+| Offline VOD                        | Defer until an application owns the service worker and defines storage limits, eviction, deletion and offline playback rights.                                                                       |
+| Advanced subtitles                 | The VOD example uses upstream and browser tracks. Revisit specialised rendering for a concrete caption requirement.                                                                                  |
+| Position persistence and playlists | The [VOD playlist example](usage.md#build-a-vod-playlist-with-resume) saves positions per asset and per tab on request. Applications own persistence and playlist policy.                            |
+| Accessible UI package              | The VOD example uses native controls with labelled playlist and caption selectors. Revisit a UI package when those controls fall short of a concrete need.                                           |
+| OpenTelemetry                      | The [application-owned bridge](usage.md#bridge-application-telemetry) records playback events and timing metrics. Export and network activity stay in the application.                               |
 
-See the [telemetry guidance](usage.md#bridge-application-telemetry) and [request-policy limits](../SECURITY.md).
+See the [optional integration checks](verification-report.md#optional-integration-checks) and [request policy](../SECURITY.md).
 
 ## Historical record
 

@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Added desktop browser tests for Low-Latency HLS (LL-HLS) delta updates, full-playlist fallback when history is missing, and a rendition-report switch that presents 360p frames. [Verification results](docs/verification-report.md#ll-hls-delta-and-rendition-report-checks)
+- Added a VOD playlist playground with per-video resume, keyboard navigation and caption controls. [Playlist example](docs/usage.md#build-a-vod-playlist-with-resume)
+- Documented native Safari AirPlay and application-owned OpenTelemetry. AirPlay playback on a physical receiver is pending. [AirPlay recipe](docs/usage.md#use-airplay-from-safari) · [OpenTelemetry recipe](docs/usage.md#bridge-application-telemetry)
 
 ## 2.1.1
 

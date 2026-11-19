@@ -1,6 +1,18 @@
 # Engineering upgrade verification
 
-This report records the LL-HLS working-tree checks, verification for versions 2.1.1 and 2.1.0, and the original upgrade evidence. The [qualification runbook](qualification.md) defines the current release checks.
+This report records the optional integration and LL-HLS checks, verification for versions 2.1.1 and 2.1.0, and the original upgrade evidence. The qualification runbook defines the current release checks. [Qualification runbook](qualification.md)
+
+## Optional integration checks
+
+Local checks ran on Windows and Node 26.12.1 using a working tree based on `6127b76`. All 48 Node tests passed, including the OpenTelemetry recipe test. Type checking, lint, formatting and the packed package checks passed. The AirPlay recipe, telemetry recipe and playlist example also type-checked in an isolated consumer of the tarball with React 19.3.1 and OpenTelemetry API 1.10.0.
+
+| Browser | Passed scenarios | Coverage                                                                                   |
+| ------- | ---------------- | ------------------------------------------------------------------------------------------ |
+| Chrome  | 24               | Full suite and a focused rerun of the playlist checks.                                     |
+| Edge    | 24               | Full suite.                                                                                |
+| Firefox | 23               | 22 passed in the full run and the remaining playlist scenario passed in the focused rerun. |
+
+The first Firefox focus assertion failed after the test moved focus programmatically. The updated test uses Tab navigation and passed in all three browsers. The playlist checks observed presented frames after source changes, caption selection, per-video position restore and playback with storage denied. Physical AirPlay receiver verification is pending. [Device check](qualification.md#airplay-device-check)
 
 ## LL-HLS delta and rendition report checks
 

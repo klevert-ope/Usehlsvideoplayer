@@ -81,6 +81,35 @@ Build the menus from the current snapshot. Rebuild them as the available choices
 
 Use `quality.current` to display the level in use. The requested level can take one or more segments to become current.
 
+## Build a VOD playlist with resume
+
+Open **VOD playlist example** in the local playground. Play a video, choose **Save position**, then switch videos using **Video**. When you return to the saved video, the example restores its position once if that time falls within the ready video's seekable range. Choose **Start over** or finish playback to clear that video's saved position. [Run the playground](../README.md#development)
+
+Keep the playlist in application state and pass the selected video's URL as `src`. Key saved positions by stable content ID. Use `controls.seek()` once the video has a seekable range and the saved time is within it. The example uses per-tab `sessionStorage` and writes a position only when the viewer chooses **Save position**. Playback can continue when storage is unavailable. If your app stores positions across sessions, define who can access them and how long to keep them. Keep stream URLs and credentials out of storage.
+
+Use `<video controls>` and label the playlist and caption selectors. Keep keyboard focus on the playlist selector as the video changes. Use the tracks exposed by the player and offer an **Off** option. Announce save, restore and recovery feedback in a status region. [W3C media player guidance](https://www.w3.org/WAI/media/av/player/)
+
+## Use AirPlay from Safari
+
+Use a public HTTPS HLS stream approved for receiver playback. The receiver needs access to the playlists and media without the sender's cookies or credentials. Set `engine: "native"` to give Safari the stream URL directly. With `auto`, the controller can choose hls.js and use a media source local to the browser. [WebKit AirPlay guidance](https://webkit.org/blog/15036/how-to-use-media-source-extensions-with-airplay/)
+
+```ts
+import { createPlaybackController } from "usehlsvideoplayer/core";
+
+export function mountAirPlayPlayer(
+  video: HTMLVideoElement,
+  publicHlsUrl: string,
+) {
+  const player = createPlaybackController();
+  video.controls = true;
+  video.playsInline = true;
+  player.setSource(video, publicHlsUrl, { engine: "native" });
+  return () => player.destroy();
+}
+```
+
+Start local playback in Safari and select the receiver from the AirPlay control when it appears. Call the returned cleanup function when removing the player. Streams that require injected headers or per-request origin rules need restricted request mode. Use the standard playback example on other browsers. [Playback example](#play-a-stream-without-react) · [Request policy](../SECURITY.md) · [AirPlay device check](qualification.md#airplay-device-check)
+
 ## Recover from a playback failure
 
 - If the browser blocks autoplay, call `controls.play()` from a click or let the viewer use the video controls.
@@ -232,4 +261,58 @@ For live tuning, use `lowLatency` and upstream latency configuration, then measu
 
 ## Bridge application telemetry
 
-Subscribe to `onEvent` and `subscribeMetrics` when your application enables telemetry. Map fixed error codes, recovery actions and numeric metrics to existing OpenTelemetry instruments; keep the exporter dependency in the application. Do not attach source URLs, headers, raw errors or manifest labels. Unsubscribe on teardown and avoid persistent user identifiers by default.
+Pass a `Meter` from your application's OpenTelemetry provider. Subscribe before calling `setSource()` so the bridge can count error events and started recovery attempts. Set `metrics: true` when attaching a source to record its startup and first-frame times in milliseconds. Configure the provider and exporter in your application. [OpenTelemetry metrics](https://opentelemetry.io/docs/languages/js/instrumentation/#metrics)
+
+```ts
+import type { Meter } from "@opentelemetry/api";
+import type { PlaybackController } from "usehlsvideoplayer/core";
+
+export function subscribeToPlaybackMetrics(
+  player: PlaybackController,
+  meter: Meter,
+) {
+  const errors = meter.createCounter("hls.playback.errors");
+  const recoveries = meter.createCounter("hls.playback.recovery.attempts");
+  const startup = meter.createHistogram("hls.playback.startup.duration", {
+    unit: "ms",
+  });
+  const firstFrame = meter.createHistogram(
+    "hls.playback.first_frame.duration",
+    {
+      unit: "ms",
+    },
+  );
+  let recordedStartup = false;
+  let recordedFirstFrame = false;
+
+  const stopEvents = player.onEvent((event) => {
+    if (event.type === "error") errors.add(1, { code: event.error.code });
+    if (event.type === "recovery" && event.recovery.phase === "running") {
+      recoveries.add(1, { action: event.recovery.action ?? "unknown" });
+    }
+  });
+  const stopMetrics = player.subscribeMetrics(() => {
+    const metrics = player.getMetrics();
+    if (metrics === null) {
+      recordedStartup = false;
+      recordedFirstFrame = false;
+      return;
+    }
+    if (!recordedStartup && metrics.startupMs !== null) {
+      recordedStartup = true;
+      startup.record(metrics.startupMs);
+    }
+    if (!recordedFirstFrame && typeof metrics.firstFrameMs === "number") {
+      recordedFirstFrame = true;
+      firstFrame.record(metrics.firstFrameMs);
+    }
+  });
+
+  return () => {
+    stopEvents();
+    stopMetrics();
+  };
+}
+```
+
+Call the returned function when disabling telemetry or before destroying the player. The bridge counts each emitted error event, including non-fatal errors. It records each timing once per source and records first-frame timing only when the browser supplies it. Use the fixed error and recovery labels shown here. Keep URLs, headers, raw errors, manifest labels and persistent identifiers out of the telemetry payload.

@@ -45,12 +45,12 @@ The `usehlsvideoplayer/core` entry works without React. See how to [attach a str
 
 ## Documentation
 
-- [Usage guide](docs/usage.md) for source changes, live playback, recovery deadlines, credential renewal, and quality preferences.
+- [Usage guide](docs/usage.md) for playback, source changes, recovery, authentication and quality. It also includes recipes for [VOD resume](docs/usage.md#build-a-vod-playlist-with-resume), [Safari AirPlay](docs/usage.md#use-airplay-from-safari) and [OpenTelemetry](docs/usage.md#bridge-application-telemetry).
 - [Playback API reference](docs/api.md) for options, commands, state, events, and metrics.
 - [Browser compatibility](docs/compatibility.md) and [playback troubleshooting](docs/troubleshooting.md).
 - [Migrate from 1.x](docs/migration.md) if you use `Usehlsplayer` or `useHlsVideoPlayer`.
 - [Engineering roadmap](docs/engineering-roadmap.md) for completed milestones, outstanding qualification and optional integrations.
-- [Verification results](docs/verification-report.md) for the tested revisions and results, including LL-HLS browser coverage.
+- [Verification results](docs/verification-report.md) for the tested revisions, local playback checks and device qualification status.
 - [Security policy](SECURITY.md) for request policy limits and private vulnerability reporting.
 
 ## Development
@@ -68,9 +68,9 @@ npm run fixtures
 npm run dev
 ```
 
-Open the local URL printed by Vite to play generated VOD, live, alternate audio and captions. The [qualification runbook](docs/qualification.md) explains how to run the browser checks and prepare a release.
+Open the local URL printed by Vite to play the generated streams. Select **VOD playlist example** to switch between two videos, try captions and save a position for each video in the current tab. The qualification runbook covers browser checks and release preparation. [Qualification runbook](docs/qualification.md)
 
-The build uses the TypeScript 7 package aliased as `typescript-native`. TypeScript 6 supplies the compiler API used by ESLint. Run the npm scripts to select the intended compiler.
+The build uses TypeScript 7 through the `typescript-native` alias. ESLint and the telemetry recipe test use the TypeScript 6 compiler API. Run the npm scripts to select the intended compiler.
 
 ## License
 

@@ -15,4 +15,6 @@ Use the result of `controls.play()` before updating a custom play button. A brow
 
 Automatic quality preferences, authentication renewal, and recovery deadlines require [2.1.0 or later](../CHANGELOG.md#210). Startup and stall deadlines also apply to native playback when enabled. Native recovery reconstructs the source. Automated adapter tests exercise native source assignment, error reporting and cleanup. Actual Safari and iOS decoding is unverified.
 
+The AirPlay recipe selects native HLS in Safari. It uses a public HTTPS stream that the receiver can reach. Playback on a physical AirPlay receiver is pending. [AirPlay recipe](usage.md#use-airplay-from-safari) · [Device check](qualification.md#airplay-device-check)
+
 The desktop hls.js suite covers Low-Latency HLS (LL-HLS) partial segments, blocking reloads, delta updates, full-playlist fallback and rendition switching. These results cover locally generated H.264 CMAF media in Chrome, Edge and Firefox. Qualify other codecs and production origins with the streams your application will use. [LL-HLS verification results](verification-report.md#ll-hls-delta-and-rendition-report-checks) · [Playback troubleshooting](troubleshooting.md)

@@ -1,6 +1,6 @@
 # Playback qualification and release
 
-Install the lockfile with `npm ci --ignore-scripts`. CI runs on pushes to `master`, on pull requests and on manual dispatch. It checks package compatibility on Node 22, 24 and 26, including React 18.2 and the locked React version. TypeScript 7 builds the library. TypeScript 6 supplies the compiler API used by ESLint.
+Install the lockfile with `npm ci --ignore-scripts`. CI runs on pushes to `master`, on pull requests and on manual dispatch. It checks package compatibility on Node 22, 24 and 26, including React 18.2 and the locked React version. TypeScript 7 builds the library. ESLint and the telemetry recipe test use the TypeScript 6 compiler API.
 
 ## Checks for each change
 
@@ -24,6 +24,21 @@ node node_modules/@playwright/test/cli.js test --grep "LL-HLS (merges|requests a
 ```
 
 For a separate origin smoke test, set `PUBLIC_LL_HLS` to a public LL-HLS manifest. The test checks partial segments, successful blocking reloads and presented frames. Use a public, unsigned URL and keep private URLs out of traces and artefacts. Deployment qualification needs the intended encoder, CDN, codecs and network conditions. [Browser compatibility](compatibility.md)
+
+## VOD playlist and telemetry checks
+
+Generate the fixtures and install the browsers as described above. Run the playlist browser checks and the telemetry recipe test.
+
+```sh
+node node_modules/@playwright/test/cli.js test test/browser/playlist.spec.mjs
+node --test test/telemetry-recipe.test.mjs
+```
+
+The playlist checks use presented video frames, keyboard focus, caption cues and the restored playback time. They also check playback when browser storage is denied. The telemetry test checks that repeat snapshots produce one measurement per source, that only the selected fields reach the meter and that teardown removes both subscriptions. [Local verification results](verification-report.md#optional-integration-checks)
+
+## AirPlay device check
+
+Run the AirPlay recipe in Safari with a physical receiver available. Play a public HTTPS HLS VOD and use the AirPlay control to select the receiver. Confirm picture and sound on the receiver. Disconnect in Safari and confirm that playback stops on the receiver and can continue locally. Record the tested revision, Safari and OS versions, receiver model and stream format. Physical receiver verification is pending. [AirPlay recipe](usage.md#use-airplay-from-safari)
 
 ## Physical Android runner
 

@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useHlsPlayer } from "../src/index.js";
 import type { PlaybackEvent } from "../src/types.js";
+import { VodPlaylist } from "./VodPlaylist.js";
 import "./style.css";
 
 const vod = "/fixtures/master.m3u8";
@@ -75,6 +76,9 @@ function Player() {
   return (
     <main>
       <h1>HLS playback playground</h1>
+      <p>
+        <a href="?playlist">VOD playlist example</a>
+      </p>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -241,4 +245,6 @@ function Player() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(<Player />);
+createRoot(document.getElementById("root")!).render(
+  params.has("playlist") ? <VodPlaylist /> : <Player />,
+);

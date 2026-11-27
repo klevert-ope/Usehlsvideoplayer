@@ -1,11 +1,17 @@
-import React, { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import * as Popover from "@radix-ui/react-popover";
 import { useHlsPlayer } from "../src/index.js";
 import type { PlaybackEvent } from "../src/types.js";
+import { Inspector } from "./Inspector.js";
+import { PlayerPanel } from "./PlayerPanel.js";
+import { PlayerSurface } from "./PlayerSurface.js";
 import { VodPlaylist } from "./VodPlaylist.js";
+import { Workspace } from "./Workspace.js";
 import "./style.css";
 
 const vod = "/fixtures/master.m3u8";
+const singleVariant = "/fixtures/low/index.m3u8";
 const liveSource = "/live/stream.m3u8";
 const params = new URLSearchParams(location.search);
 const noRetry = {
@@ -27,14 +33,16 @@ function Player() {
     params.has("live")
       ? liveSource
       : params.has("singleVariant")
-        ? "/fixtures/low/index.m3u8"
+        ? singleVariant
         : vod,
   );
+  const [sourceOpen, setSourceOpen] = useState(false);
   const [draft, setDraft] = useState(src ?? "");
-  const [maxHeight, setMaxHeight] = useState<number | undefined>();
+  const [maxHeight, setMaxHeight] = useState<number>();
   const [events, setEvents] = useState<PlaybackEvent[]>([]);
   const token = useRef("expired-demo");
   const demoCount = useRef(0);
+  const authenticated = Boolean(src?.startsWith("/auth-fixture/"));
   const demoRequest = useMemo(
     () => ({
       allowedOrigins: [location.origin],
@@ -49,17 +57,7 @@ function Player() {
     }),
     [],
   );
-  const {
-    videoRef,
-    state,
-    controls,
-    quality,
-    audio,
-    subtitles,
-    live,
-    metrics,
-    error,
-  } = useHlsPlayer({
+  const player = useHlsPlayer({
     src,
     metrics: true,
     engine: params.has("native") ? "native" : "auto",
@@ -68,182 +66,144 @@ function Player() {
       : undefined,
     hlsConfig: testConfig,
     quality: maxHeight === undefined ? undefined : { maxHeight },
-    request: src?.startsWith("/auth-fixture/") ? demoRequest : undefined,
+    request: authenticated ? demoRequest : undefined,
     onEvent: (event) =>
       setEvents((previous) => [...previous.slice(-19), event]),
   });
 
+  const sourceName =
+    src === vod
+      ? "VOD fixture"
+      : src === singleVariant
+        ? "Single-rendition fixture"
+        : src === liveSource
+          ? "Live fixture"
+          : authenticated
+            ? "Credential renewal"
+            : src
+              ? "Custom manifest"
+              : "Select stream";
+
   return (
-    <main>
-      <h1>HLS playback playground</h1>
-      <p>
-        <a href="?playlist">VOD playlist example</a>
-      </p>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          setSource(draft);
-        }}
-      >
-        <label htmlFor="stream-url">Manifest URL</label>
-        <div className="row">
-          <input
-            id="stream-url"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+    <Workspace>
+      <PlayerSurface
+        player={player}
+        title="HLS stream"
+        muted
+        poster={
+          src === vod || src === singleVariant
+            ? "/monitor-slate.webp"
+            : undefined
+        }
+        maxHeight={maxHeight}
+        onLimit={setMaxHeight}
+        inspector={
+          <Inspector
+            player={player}
+            events={events}
+            metrics={src ? player.metrics : null}
           />
-          <button type="submit">Load</button>
-        </div>
-      </form>
-      <div className="row">
-        <button
-          onClick={() => {
-            setDraft(vod);
-            setSource(vod);
-          }}
-        >
-          VOD fixture
-        </button>
-        <button
-          onClick={() => {
-            setDraft(liveSource);
-            setSource(liveSource);
-          }}
-        >
-          Live fixture
-        </button>
-        <button onClick={() => setSource(null)}>Clear</button>
-        <button
-          onClick={() => {
-            token.current = "expired-demo";
-            const next = `/auth-fixture/manifest.m3u8?session=${++demoCount.current}`;
-            setDraft(next);
-            setSource(next);
-            setEvents([]);
-          }}
-        >
-          Test credential renewal
-        </button>
-      </div>
-      <video ref={videoRef} controls muted playsInline />
-      <div className="row">
-        <button onClick={() => void controls.play()}>Play stream</button>
-        <button onClick={controls.pause}>Pause stream</button>
-        <button disabled={!live.canSeekToLive} onClick={controls.seekToLive}>
-          Seek to live
-        </button>
-        <button disabled={state.status !== "error"} onClick={controls.retry}>
-          Retry
-        </button>
-      </div>
-      <div className="row">
-        <label>
-          Automatic resolution preference{" "}
-          <select
-            value={maxHeight ?? "unlimited"}
-            onChange={(event) =>
-              setMaxHeight(
-                event.target.value === "unlimited"
-                  ? undefined
-                  : Number(event.target.value),
-              )
+        }
+        selection={
+          <PlayerPanel
+            title="Stream source"
+            label={"Source " + sourceName}
+            className="panel-trigger selection-trigger"
+            trigger={
+              <>
+                <span className="selection-caption" aria-hidden="true">
+                  Source
+                </span>
+                <span className="selection-value">{sourceName}</span>
+                <span className="chevron" aria-hidden="true" />
+              </>
             }
+            open={sourceOpen}
+            onOpenChange={setSourceOpen}
           >
-            <option value="unlimited">Upstream defaults</option>
-            <option value="180">Prefer up to 180p</option>
-            <option value="360">Prefer up to 360p</option>
-          </select>
-        </label>
-        <label>
-          Quality{" "}
-          <select
-            disabled={!quality.levels.length}
-            value={quality.selected ?? "auto"}
-            onChange={(event) =>
-              controls.setQuality(
-                event.target.value === "auto"
-                  ? "auto"
-                  : Number(event.target.value),
-              )
-            }
-          >
-            <option value="auto">Auto</option>
-            {quality.levels.map(({ id, height }) => (
-              <option key={id} value={id}>
-                {height}p
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Audio{" "}
-          <select
-            disabled={!audio.tracks.length}
-            value={audio.selected ?? ""}
-            onChange={(event) =>
-              controls.setAudioTrack(Number(event.target.value))
-            }
-          >
-            <option value="" disabled>
-              Default
-            </option>
-            {audio.tracks.map(({ id, label }) => (
-              <option key={id} value={id}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Subtitles{" "}
-          <select
-            disabled={!subtitles.tracks.length}
-            value={subtitles.selected ?? "off"}
-            onChange={(event) =>
-              controls.setSubtitleTrack(
-                event.target.value === "off"
-                  ? "off"
-                  : Number(event.target.value),
-              )
-            }
-          >
-            <option value="off">Off</option>
-            {subtitles.tracks.map(({ id, label }) => (
-              <option key={id} value={id}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <p role="status">
-        <span data-testid="status">{state.status}</span> ·{" "}
-        <span data-testid="engine">{state.engine ?? "no engine"}</span>
-      </p>
-      {error && (
-        <p role="alert" data-testid="error-code">
-          {error.code}
-        </p>
-      )}
-      <dl>
-        <dt>Current quality</dt>
-        <dd data-testid="current-quality">{quality.current ?? "—"}</dd>
-        <dt>Live latency estimate</dt>
-        <dd data-testid="live-latency">{live.latency?.toFixed(2) ?? "—"}</dd>
-        <dt>Recovery</dt>
-        <dd data-testid="recovery">{state.recovery?.phase ?? "—"}</dd>
-      </dl>
-      <details>
-        <summary>Playback metrics</summary>
-        <pre data-testid="metrics">{JSON.stringify(metrics)}</pre>
-      </details>
-      <details>
-        <summary>Recent recovery and playback events</summary>
-        <pre>{JSON.stringify(events, null, 2)}</pre>
-      </details>
-    </main>
+            <div className="source-actions">
+              {[
+                { url: vod, label: "VOD fixture" },
+                { url: liveSource, label: "Live fixture" },
+              ].map(({ url, label }) => (
+                <Popover.Close key={url} asChild>
+                  <button
+                    type="button"
+                    aria-current={src === url ? "true" : undefined}
+                    onClick={() => {
+                      setDraft(url);
+                      setSource(url);
+                    }}
+                  >
+                    {label}
+                  </button>
+                </Popover.Close>
+              ))}
+              <Popover.Close asChild>
+                <button
+                  type="button"
+                  aria-current={authenticated ? "true" : undefined}
+                  onClick={() => {
+                    token.current = "expired-demo";
+                    const next =
+                      "/auth-fixture/manifest.m3u8?session=" +
+                      ++demoCount.current;
+                    setDraft(next);
+                    setSource(next);
+                    setEvents([]);
+                  }}
+                >
+                  Test credential renewal
+                </button>
+              </Popover.Close>
+            </div>
+            <details className="custom-source">
+              <summary>Custom manifest URL</summary>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const next = draft.trim();
+                  if (!next) return;
+                  setSource(next);
+                  setSourceOpen(false);
+                }}
+              >
+                <label htmlFor="stream-url">Manifest URL</label>
+                <div className="source-input">
+                  <input
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    inputMode="url"
+                    id="stream-url"
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                  />
+                  <button disabled={!draft.trim()} type="submit">
+                    Load
+                  </button>
+                </div>
+              </form>
+            </details>
+            <Popover.Close asChild>
+              <button
+                type="button"
+                className="clear-source"
+                disabled={!src}
+                onClick={() => setSource(null)}
+              >
+                Clear
+              </button>
+            </Popover.Close>
+          </PlayerPanel>
+        }
+      />
+    </Workspace>
   );
 }
+
+document.title =
+  (params.has("playlist") ? "VOD playlist" : "Playback playground") +
+  " · Signal Desk";
 
 createRoot(document.getElementById("root")!).render(
   params.has("playlist") ? <VodPlaylist /> : <Player />,

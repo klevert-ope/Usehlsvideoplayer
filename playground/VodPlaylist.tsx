@@ -1,16 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { useHlsPlayer } from "../src/index.js";
+import { Inspector } from "./Inspector.js";
+import { PlayerPanel } from "./PlayerPanel.js";
+import { PlayerSurface } from "./PlayerSurface.js";
+import { Workspace } from "./Workspace.js";
 
 const playlist = [
   {
     id: "alternate-tracks",
     title: "Alternate audio and captions",
+    format: "MPEG transport stream",
     src: "/fixtures/master.m3u8",
+    poster: "/monitor-slate.webp",
   },
   {
     id: "cmaf",
     title: "CMAF video",
+    format: "Fragmented MP4",
     src: "/fixtures/cmaf/index.m3u8",
+    poster: "/cmaf-slate.webp",
   },
 ] as const;
 
@@ -36,10 +44,17 @@ function writePosition(id: string, seconds: number | null) {
 }
 
 export function VodPlaylist() {
-  const [item, setItem] = useState<(typeof playlist)[number]>(playlist[0]);
+  const [index, setIndex] = useState(0);
   const [notice, setNotice] = useState("");
+  const [playlistOpen, setPlaylistOpen] = useState(false);
   const restored = useRef(false);
-  const { videoRef, store, state, controls, subtitles, error } = useHlsPlayer({
+  const [maxHeight, setMaxHeight] = useState<number>();
+  const item = playlist[index]!;
+  const step = index < playlist.length - 1 ? 1 : -1;
+  const stepLabel = step === 1 ? "Next clip" : "Previous clip";
+
+  const player = useHlsPlayer({
+    quality: maxHeight === undefined ? undefined : { maxHeight },
     src: item.src,
     onEvent(event) {
       if (event.type === "transition" && event.to === "ended") {
@@ -48,6 +63,7 @@ export function VodPlaylist() {
       }
     },
   });
+  const { store, state, controls } = player;
   const { duration, currentTime } = state;
   const canSeek = duration !== null && state.seekable.length > 0;
   const canSave = canSeek && currentTime > 0 && currentTime < duration;
@@ -68,78 +84,111 @@ export function VodPlaylist() {
     }
   }, [controls, item.id, state.duration, state.seekable, store]);
 
+  function selectClip(next: number) {
+    restored.current = false;
+    setNotice("");
+    setIndex(next);
+  }
+
   return (
-    <main>
-      <h1>VOD playlist</h1>
-      <label htmlFor="playlist-item">Video</label>{" "}
-      <select
-        id="playlist-item"
-        value={item.id}
-        onChange={(event) => {
-          const next = playlist.find(({ id }) => id === event.target.value);
-          if (!next || next === item) return;
-          restored.current = false;
-          setNotice("");
-          setItem(next);
-        }}
-      >
-        {playlist.map(({ id, title }) => (
-          <option key={id} value={id}>
-            {title}
-          </option>
-        ))}
-      </select>
-      <video ref={videoRef} controls playsInline aria-label={item.title} />
-      <div className="row">
-        <label htmlFor="playlist-captions">Captions</label>
-        <select
-          id="playlist-captions"
-          disabled={subtitles.tracks.length === 0}
-          value={subtitles.selected ?? "off"}
-          onChange={(event) => {
-            const id = event.target.value;
-            controls.setSubtitleTrack(id === "off" ? "off" : Number(id));
-          }}
-        >
-          <option value="off">Off</option>
-          {subtitles.tracks.map(({ id, label }) => (
-            <option key={id} value={id}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          disabled={!canSave || state.status === "ended"}
-          onClick={() => {
-            const saved = writePosition(item.id, currentTime);
-            setNotice(
-              saved ? "Position saved." : "Position could not be saved.",
-            );
-          }}
-        >
-          Save position
-        </button>
-        <button
-          type="button"
-          disabled={!canSeek}
-          onClick={() => {
-            if (!controls.seek(0)) return;
-            const cleared = writePosition(item.id, null);
-            setNotice(
-              cleared
-                ? "Position cleared."
-                : "Saved position could not be cleared.",
-            );
-          }}
-        >
-          Start over
-        </button>
-      </div>
-      <p role="status">
-        {state.status === "recovering" ? "Reconnecting to the video." : notice}
-      </p>
-      {error && state.status === "error" && <p role="alert">{error.message}</p>}
-    </main>
+    <Workspace playlist>
+      <PlayerSurface
+        player={player}
+        title={item.title}
+        maxHeight={maxHeight}
+        onLimit={setMaxHeight}
+        poster={item.poster}
+        notice={
+          state.status === "recovering" ? "Reconnecting to the video." : notice
+        }
+        inspector={<Inspector player={player} manifest={item.src} />}
+        clipStep={
+          <button
+            type="button"
+            className="transport-button clip-step"
+            onClick={() => selectClip(index + step)}
+            aria-label={stepLabel}
+            title={stepLabel}
+            data-direction={step === 1 ? "next" : "previous"}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 5 10 7-10 7zM19 5v14" />
+            </svg>
+          </button>
+        }
+        selection={
+          <PlayerPanel
+            title="Playlist"
+            label={"Playlist " + item.title}
+            className="panel-trigger selection-trigger"
+            open={playlistOpen}
+            onOpenChange={setPlaylistOpen}
+            trigger={
+              <>
+                <span className="selection-caption" aria-hidden="true">
+                  {index + 1}/{playlist.length}
+                </span>
+                <span className="selection-value">{item.title}</span>
+                <span className="chevron" aria-hidden="true" />
+              </>
+            }
+          >
+            <fieldset className="clip-list">
+              <legend className="sr-only">Video</legend>
+              {playlist.map((clip, clipIndex) => (
+                <label className="clip" key={clip.id}>
+                  <input
+                    type="radio"
+                    name="video"
+                    checked={index === clipIndex}
+                    onChange={() => selectClip(clipIndex)}
+                  />
+                  <img className="clip-thumb" src={clip.poster} alt="" />
+                  <span>
+                    {clip.title}
+                    <small>{clip.format}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <div
+              className="position-actions"
+              role="group"
+              aria-label="Clip position"
+            >
+              <button
+                type="button"
+                disabled={!canSave || state.status === "ended"}
+                onClick={() => {
+                  const saved = writePosition(item.id, currentTime);
+                  setNotice(
+                    saved ? "Position saved." : "Position could not be saved.",
+                  );
+                  setPlaylistOpen(false);
+                }}
+              >
+                Save position
+              </button>
+              <button
+                type="button"
+                disabled={!canSeek}
+                onClick={() => {
+                  if (!controls.seek(0)) return;
+                  const cleared = writePosition(item.id, null);
+                  setNotice(
+                    cleared
+                      ? "Position cleared."
+                      : "Saved position could not be cleared.",
+                  );
+                  setPlaylistOpen(false);
+                }}
+              >
+                Start over
+              </button>
+            </div>
+          </PlayerPanel>
+        }
+      />
+    </Workspace>
   );
 }

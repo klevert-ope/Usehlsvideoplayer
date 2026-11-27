@@ -21,14 +21,17 @@ test("playground demonstrates renewal and keeps the quality controls distinct", 
   page,
 }, info) => {
   await page.goto("/");
+  await page.getByRole("button", { name: /^Source / }).click();
   await page.getByRole("button", { name: "Test credential renewal" }).click();
   await expect(page.getByTestId("status")).toHaveText("ready");
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
   await expect(page.getByTestId("recovery")).toHaveText("recovered");
-  await page.getByRole("button", { name: "Play stream" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "play", exact: true }).press("Space");
   await expect(page.getByTestId("status")).toHaveText("playing");
-  await expect(
-    page.getByLabel("Automatic resolution preference"),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByText("Quality options").click();
+  await expect(page.getByLabel("Auto resolution limit")).toBeVisible();
   await expect(page.getByLabel("Quality")).toHaveCount(1);
   await page.screenshot({
     path: info.outputPath("playground.png"),

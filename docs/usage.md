@@ -83,7 +83,9 @@ Use `quality.current` to display the level in use. The requested level can take 
 
 ## Build a VOD playlist with resume
 
-Open **VOD playlist example** in the local playground. Play a video, choose **Save position**, then switch videos using **Video**. When you return to the saved video, the example restores its position once if that time falls within the ready video's seekable range. Choose **Start over** or finish playback to clear that video's saved position. [Run the playground](../README.md#development)
+Open **VOD playlist** in the local playground. Play a clip, then open the playlist using the clip name on the player and choose **Save position**. Switch clips from the playlist or with **Next clip** and **Previous clip** in the playbar. The example restores the saved position when you return to a clip and the time is still seekable. Choose **Start over** in the playlist or finish playback to clear that clip's saved position. [Run the playground](../README.md#development)
+
+Use the player’s **Settings** to adjust audio, captions, speed and volume. **Quality options** contains manual rendition selection and the separate resolution limit for automatic mode. **Inspector** shows playback diagnostics and stays open beside the video on wide screens. Use the source selector in **Playground** to switch fixtures, test credential renewal, load a custom manifest or clear the current stream.
 
 Keep the playlist in application state and pass the selected video's URL as `src`. Key saved positions by stable content ID. Use `controls.seek()` once the video has a seekable range and the saved time is within it. The example uses per-tab `sessionStorage` and writes a position only when the viewer chooses **Save position**. Playback can continue when storage is unavailable. If your app stores positions across sessions, define who can access them and how long to keep them. Keep stream URLs and credentials out of storage.
 

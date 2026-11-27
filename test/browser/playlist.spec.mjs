@@ -23,21 +23,38 @@ test("the VOD playlist plays, selects captions by keyboard and restores each vid
     sessionStorage.setItem("hls-playground:position:cmaf", "99999");
   });
   await page.goto("/");
-  await page.getByRole("link", { name: "VOD playlist example" }).click();
+  await page.getByRole("link", { name: "VOD playlist" }).click();
   const video = page.locator("video");
-  const playlist = page.getByLabel("Video", { exact: true });
-  const captions = page.getByLabel("Captions", { exact: true });
+  const firstClip = page.getByRole("radio", {
+    name: /Alternate audio and captions/,
+  });
+  const secondClip = page.getByRole("radio", { name: /CMAF video/ });
+  const captions = page.getByRole("combobox", {
+    name: "Captions",
+    exact: true,
+  });
   const save = page.getByRole("button", { name: "Save position" });
   const restart = page.getByRole("button", { name: "Start over" });
-  const status = page.getByRole("status");
+  const status = page.getByTestId("playlist-notice");
   const time = () => video.evaluate((element) => element.currentTime);
 
-  await expect(video).toHaveAttribute("controls", "");
-  await expect(restart).toBeEnabled();
+  await expect(video).toHaveJSProperty("controls", false);
+  const settings = page.getByRole("button", { name: "Settings", exact: true });
+  const playlist = page.getByRole("button", { name: /^Playlist / });
+  await playlist.press("Enter");
   await page.keyboard.press("Tab");
-  await expect(playlist).toBeFocused();
-  await expect(playlist).toHaveCSS("outline-style", "solid");
+  await expect(firstClip).toBeFocused();
+  await expect(page.locator("label.clip").filter({ has: firstClip })).toHaveCSS(
+    "outline-style",
+    "solid",
+  );
+  await expect(restart).toBeEnabled();
   await presentFrame(video, 4);
+  await page.keyboard.press("Escape");
+  await settings.press("Enter");
+  await expect(settings).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("combobox", { name: "Audio", exact: true }).press("Tab");
+  await expect(captions).toBeFocused();
   await expect(captions).toBeEnabled();
   await captions.press("End");
   await expect(captions).toBeFocused();
@@ -54,22 +71,31 @@ test("the VOD playlist plays, selects captions by keyboard and restores each vid
       ),
     )
     .toBe(true);
+  await page.keyboard.press("Escape");
+  await playlist.click();
   await save.click();
   await expect(status).toHaveText("Position saved.");
+  await expect(playlist).toBeFocused();
 
   const cmaf = page.waitForResponse("**/fixtures/cmaf/index.m3u8");
-  await playlist.press("End");
-  await expect(playlist).toHaveValue("cmaf");
-  await expect(playlist).toBeFocused();
+  await playlist.click();
+  await firstClip.press("ArrowRight");
+  await expect(secondClip).toBeChecked();
+  await expect(secondClip).toBeFocused();
   expect((await cmaf).ok()).toBe(true);
+  await page.keyboard.press("Escape");
+  await settings.click();
   await expect(captions).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await playlist.click();
   await expect(restart).toBeEnabled();
   await expect.poll(time).toBeLessThan(0.25);
   await presentFrame(video, 8);
   await save.click();
   await expect(status).toHaveText("Position saved.");
 
-  await playlist.press("Home");
+  await playlist.click();
+  await secondClip.press("ArrowLeft");
   await expect(status).toHaveText("Saved position restored.");
   await expect.poll(time).toBeGreaterThan(3.75);
   expect(await time()).toBeLessThan(5);
@@ -80,7 +106,9 @@ test("the VOD playlist plays, selects captions by keyboard and restores each vid
     await element.play();
   });
   await expect(status).toHaveText("Playback finished.");
-  await playlist.press("End");
+  await page.keyboard.press("Escape");
+  await playlist.click();
+  await firstClip.press("ArrowRight");
   await expect(status).toHaveText("Saved position restored.");
   await expect.poll(time).toBeGreaterThan(7.75);
   expect(await time()).toBeLessThan(9);
@@ -88,11 +116,14 @@ test("the VOD playlist plays, selects captions by keyboard and restores each vid
   await expect(status).toHaveText("Position cleared.");
   await expect.poll(time).toBeLessThan(0.25);
 
-  await playlist.press("Home");
+  await playlist.click();
+  await secondClip.press("ArrowLeft");
   await expect(restart).toBeEnabled();
   await expect.poll(time).toBeLessThan(0.25);
   await expect(status).toBeEmpty();
-  await playlist.press("End");
+  await page.keyboard.press("Escape");
+  await playlist.click();
+  await firstClip.press("ArrowRight");
   await expect(restart).toBeEnabled();
   await expect.poll(time).toBeLessThan(0.25);
   await expect(status).toBeEmpty();
@@ -109,10 +140,11 @@ test("the VOD playlist plays when session storage is denied", async ({
     });
   });
   await page.goto("/?playlist");
+  await page.getByRole("button", { name: /^Playlist / }).click();
   await expect(page.getByRole("button", { name: "Start over" })).toBeEnabled();
   await presentFrame(page.locator("video"), 2);
   await page.getByRole("button", { name: "Save position" }).click();
-  await expect(page.getByRole("status")).toHaveText(
+  await expect(page.getByTestId("playlist-notice")).toHaveText(
     "Position could not be saved.",
   );
 });

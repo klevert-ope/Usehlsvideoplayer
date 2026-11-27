@@ -1,6 +1,7 @@
 .idea/
 node_modules/
 dist/
+/output/
 public/fixtures/
 playwright-report/
 test-results/

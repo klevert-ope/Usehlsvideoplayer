@@ -11,7 +11,7 @@ const noRetry = {
 async function begin(page, path = "/") {
   await page.goto(path);
   await expect(page.getByTestId("status")).toHaveText("ready");
-  await page.getByRole("button", { name: "Play stream" }).click();
+  await page.getByRole("button", { name: "play", exact: true }).press("Space");
   await expect(page.getByTestId("status")).toHaveText("playing");
 }
 
@@ -20,21 +20,27 @@ test("VOD decodes through hls.js, changes rendition and selects alternate audio 
 }, info) => {
   test.setTimeout(50_000);
   await begin(page);
-  await expect(page.getByTestId("engine")).toHaveText("hls.js");
   const video = page.locator("video");
   await expect
     .poll(() => video.evaluate((element) => element.currentTime))
     .toBeGreaterThan(0.25);
+  await expect(video).toHaveJSProperty("controls", false);
+  await expect(page.getByText("Live latency", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "pause", exact: true }).press("Space");
+  await expect(video).toHaveJSProperty("paused", true);
+  await expect(page.getByTestId("status")).toHaveText("paused");
+  await page.getByRole("button", { name: "play", exact: true }).press("Space");
+  await expect(video).toHaveJSProperty("paused", false);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByText("Quality options").click();
   const toLow = performance.now();
   await page.getByLabel("Quality").selectOption({ label: "180p" });
-  await expect(page.getByTestId("current-quality")).toHaveText("0");
   await expect
     .poll(() => video.evaluate((element) => element.videoHeight))
     .toBe(180);
   const lowMs = performance.now() - toLow;
   const toHigh = performance.now();
   await page.getByLabel("Quality").selectOption({ label: "360p" });
-  await expect(page.getByTestId("current-quality")).toHaveText("1");
   await expect
     .poll(() => video.evaluate((element) => element.videoHeight))
     .toBe(360);
@@ -52,7 +58,7 @@ test("VOD decodes through hls.js, changes rendition and selects alternate audio 
   await page.getByLabel("Audio").selectOption({ label: "Alternate" });
   await audio;
   const captions = page.waitForResponse(/english\.vtt/);
-  await page.getByLabel("Subtitles").selectOption({ label: "English" });
+  await page.getByLabel("Captions").selectOption({ label: "English" });
   expect((await captions).ok()).toBe(true);
   await expect
     .poll(() =>
@@ -67,7 +73,7 @@ test("VOD decodes through hls.js, changes rendition and selects alternate audio 
       ),
     )
     .toBe(true);
-  await page.getByLabel("Subtitles").selectOption("off");
+  await page.getByLabel("Captions").selectOption("off");
   await expect
     .poll(() =>
       video.evaluate((element) =>
@@ -77,8 +83,21 @@ test("VOD decodes through hls.js, changes rendition and selects alternate audio 
       ),
     )
     .toBe(false);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  await expect(page.getByTestId("engine")).toHaveText("hls.js");
+  await expect(page.getByTestId("current-quality")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Source / }).click();
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(page.getByTestId("status")).toHaveText("idle");
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  await expect(page.getByText("Playback metrics", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText("Dropped frames", { exact: true })).toHaveCount(
+    0,
+  );
   await expect
     .poll(() =>
       video.evaluate((element) => [
@@ -115,6 +134,7 @@ test("rolling live playlist exposes an advancing seekable window and seek-to-liv
   await expect
     .poll(() => video.evaluate((element) => element.currentTime))
     .toBeGreaterThan(behind + 1);
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
   expect(
     Number(await page.getByTestId("live-latency").textContent()),
   ).toBeGreaterThanOrEqual(0);
@@ -130,8 +150,10 @@ test("recovers from an actual failed segment request and reaches a terminal erro
     else await route.continue();
   });
   await page.goto("/?fastRecovery&singleVariant");
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
   await expect(page.getByTestId("recovery")).toHaveText("recovered");
-  await page.getByRole("button", { name: "Play stream" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "play", exact: true }).press("Space");
   await expect(page.getByTestId("status")).toHaveText("playing");
   await expect
     .poll(() => page.locator("video").evaluate((video) => video.currentTime))
@@ -139,11 +161,14 @@ test("recovers from an actual failed segment request and reaches a terminal erro
   await page.route("**/corrupt.m3u8", (route) =>
     route.fulfill({ body: "not an HLS playlist" }),
   );
+  await page.getByRole("button", { name: /^Source / }).click();
+  await page.getByText("Custom manifest URL", { exact: true }).click();
   await page.getByLabel("Manifest URL").fill("/corrupt.m3u8");
   await page.getByRole("button", { name: "Load", exact: true }).click();
   await expect(page.getByTestId("status")).toHaveText("error");
   await expect(page.getByTestId("error-code")).toHaveText("manifest");
-  await expect(page.getByTestId("recovery")).toHaveText("—");
+  await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
+  await expect(page.getByTestId("recovery")).toHaveCount(0);
 
   await page.route("**/missing/seg404.ts", (route) =>
     route.fulfill({ status: 404 }),
@@ -153,10 +178,33 @@ test("recovers from an actual failed segment request and reaches a terminal erro
       body: "#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nseg404.ts\n#EXT-X-ENDLIST\n",
     }),
   );
+  await page.getByRole("button", { name: /^Source / }).click();
+  await page.getByText("Custom manifest URL", { exact: true }).click();
   await page.getByLabel("Manifest URL").fill("/missing/index.m3u8");
   await page.getByRole("button", { name: "Load", exact: true }).click();
   await expect(page.getByTestId("error-code")).toHaveText("segment");
   await expect(page.getByTestId("status")).toHaveText("error");
+});
+
+test("Retry reloads a stream after automatic recovery is exhausted", async ({
+  page,
+}) => {
+  let available = false;
+  await page.route("**/fixtures/low/index.m3u8", (route) =>
+    available ? route.continue() : route.fulfill({ status: 503 }),
+  );
+  await page.goto("/?fastRecovery&singleVariant");
+  await expect(page.getByTestId("status")).toHaveText("error");
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  await expect(page.getByTestId("recovery")).toHaveText("exhausted");
+  await page.keyboard.press("Escape");
+  available = true;
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByTestId("status")).toHaveText("ready");
+  await page.getByRole("button", { name: "play", exact: true }).press("Space");
+  await expect
+    .poll(() => page.locator("video").evaluate((video) => video.currentTime))
+    .toBeGreaterThan(0.25);
 });
 
 test("authenticated requests send headers to trusted origins and reject expiry, redirects and untrusted children", async ({
